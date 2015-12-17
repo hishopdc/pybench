@@ -5,7 +5,7 @@ SQL_OPT = {
     'db': 'demo'
 }
 
-RESET_DB = True
+RESET_DB = False
 
 AGENTS = 1
 DURATION = 60

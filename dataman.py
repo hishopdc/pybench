@@ -33,6 +33,7 @@ class DataMan:
 
     def fill_users(self, users):
         cursor = self.conn.cursor()
+        c = 0
         for u in users:
             sql = 'INSERT INTO [%s].[dbo].[Users] VALUES (' % self.opt['db']
             sql += "%d, '%s', '%s', '%s', '%s', 0, 0)" % (
@@ -44,11 +45,18 @@ class DataMan:
             )
 
             cursor.execute(sql)
+            c += 1
+            
+            if c == 1000:
+                self.conn.commit()
+                c = 0
 
-        self.conn.commit();
+        if c > 0:
+            self.conn.commit()
 
     def fill_products(self, products):
         cursor = self.conn.cursor()
+        c = 0
         for p in products:
             sql = 'INSERT INTO [%s].[dbo].[Products] VALUES (' % self.opt['db']
             sql += "%d, '%s', %d, %d)" % (
@@ -59,8 +67,14 @@ class DataMan:
             )
 
             cursor.execute(sql)
+            c += 1
+            
+            if c == 1000:
+                self.conn.commit()
+                c = 0
 
-        self.conn.commit();
+        if c > 0:
+            self.conn.commit()
 
     def fill_promotions(self, promotions):
         cursor = self.conn.cursor()

@@ -59,7 +59,7 @@ class DetailTaskRequest(TaskRequest):
         return True
 
 class TaskAgent(Thread):
-    def __init__(self, id, runtime_stats, task):
+    def __init__(self, id, runtime_stats, task, signal):
         Thread.__init__(self)
         self.id = id
         self.runtime_stats = runtime_stats
@@ -69,6 +69,7 @@ class TaskAgent(Thread):
         self.default_timer = time.time
         self.trace_logging = False
         self.task = task
+        self.signal = signal
 
     def run(self):
         agent_start_time = time.strftime('%H:%M:%S', time.localtime())
@@ -78,29 +79,32 @@ class TaskAgent(Thread):
         total_bytes = 0
 
         while self.running:
-            self.cookie_jar = cookielib.CookieJar()
-            resp, content, req_start_time, req_end_time, connect_end_time = self.send(self.task)
+            if self.signal['setted']:
+                self.cookie_jar = cookielib.CookieJar()
+                resp, content, req_start_time, req_end_time, connect_end_time = self.send(self.task)
 
-            if resp.code != 200:
-                self.error_count += 1
+                if resp.code != 200:
+                    self.error_count += 1
 
-            latency = (req_end_time - req_start_time)
-            connect_latency = (connect_end_time - req_start_time)
-            resp_bytes = len(content)
+                latency = (req_end_time - req_start_time)
+                connect_latency = (connect_end_time - req_start_time)
+                resp_bytes = len(content)
 
-            self.count += 1
-            total_bytes += resp_bytes
-            total_latency += latency
-            total_connect_latency += connect_latency
+                self.count += 1
+                total_bytes += resp_bytes
+                total_latency += latency
+                total_connect_latency += connect_latency
 
-            self.runtime_stats[self.id] = StatCollection(
-                resp.code, resp.msg, latency, self.count, self.error_count,
-                total_latency, total_connect_latency, total_bytes
-            )
-            self.runtime_stats[self.id].agent_start_time = agent_start_time
+                self.runtime_stats[self.id] = StatCollection(
+                    resp.code, resp.msg, latency, self.count, self.error_count,
+                    total_latency, total_connect_latency, total_bytes
+                )
+                self.runtime_stats[self.id].agent_start_time = agent_start_time
 
-            if not self.task.loop:
-                break
+                if not self.task.loop:
+                    break
+            else:
+                time.sleep(0.01)
 
     def stop(self):
         self.running = False
@@ -206,12 +210,16 @@ class LoadManager(Thread):
         self.results_writer.setDaemon(True)
         self.results_writer.start()
 
+        signal = {
+            'setted': False
+        }
+
         for i in range(self.num_agents):
             spacing = float(self.rampup) / float(self.num_agents)
             if i > 0:
                 time.sleep(spacing)
             if self.running:
-                agent = TaskAgent(i, self.runtime_stats, self.tasks[i])
+                agent = TaskAgent(i, self.runtime_stats, self.tasks[i], signal)
                 agent.start()
                 self.agent_refs.append(agent)
                 agent_started_line = u'启动虚拟用户 %d 个' % (i + 1)
@@ -223,6 +231,9 @@ class LoadManager(Thread):
                     sys.stdout.write(esc + '[G' )
                     sys.stdout.write(esc + '[A' )
                     sys.stdout.write(agent_started_line + '\n')
+
+        signal['setted'] = True
+
         if sys.platform.startswith('win'):
             sys.stdout.write('\n')
 

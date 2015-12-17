@@ -122,10 +122,10 @@ def get_products():
         u'伏羲琴', u'神农鼎', u'崆峒印', u'昆仑镜', u'女娲石'
     ]
 
-    for i in range(len(shenqi)):
+    for i in range(1000000):
         products.append({
             'ProductId': i + 2,
-            'ProductName': shenqi[i],
+            'ProductName': shenqi[i % len(shenqi)] + str(time.time()),
             'SaleCounts': 0,
             'Stock': 100
         })
@@ -154,7 +154,7 @@ def main():
     print('HiBench 开始评测...')
     print(tm_start.strftime('%Y-%m-%d %H:%M:%S.%f\n'))
 
-    users = get_users(2)
+    users = get_users(2000)
 
     if config.RESET_DB == True:
         dm = DataMan(config.SQL_OPT)
@@ -173,7 +173,7 @@ def main():
 
     tasks = []
     for u in users:
-        url = 'http://demo.testfx.kuaidiantong.cn/promotion/index.ashx'
+        url = 'http://10.168.163.110:12800/promotion/index.ashx'
         url += "?uid=%d&prom_id=%d&time=%d" % (u['UserId'], 1, time.time())
 
         req = DetailTaskRequest(url)
@@ -189,11 +189,11 @@ def main():
     lm.start()
 
     start_time = time.time()
-    duration = 60 * 60
+    duration = 60 * 3
     reporter = RuntimeReporter(duration, runtime_stats)
 
     while (time.time() < start_time + duration):
-        refresh_rate = 1
+        refresh_rate = 0.5
         time.sleep(refresh_rate)
 
         if lm.agents_started:
