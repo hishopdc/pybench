@@ -24,7 +24,7 @@ def reset_db():
         68,
         '2015-12-16 01:35:00',
         '2015-12-16 02:35:00',
-        100,
+        50,
         168.5
     )
 
@@ -33,7 +33,7 @@ def reset_db():
 
 def do_detail_task(id_from, id_to, duration):
     tm_start = datetime.now()
-    print('HiBench 开始评测...')
+    print('HiBench 开始详情加压评测...')
     print(tm_start.strftime('%Y-%m-%d %H:%M:%S.%f\n'))
 
     interval = config.INTERVAL
@@ -93,7 +93,7 @@ def do_detail_task(id_from, id_to, duration):
 
 def do_buy_task(id_from, id_to, duration):
     tm_start = datetime.now()
-    print('HiBench 开始评测...')
+    print('HiBench 开始抢购评测...')
     print(tm_start.strftime('%Y-%m-%d %H:%M:%S.%f\n'))
 
     interval = config.INTERVAL
@@ -121,14 +121,23 @@ def do_buy_task(id_from, id_to, duration):
     duration_s = duration * 60
     reporter = RuntimeReporter(duration_s, runtime_stats)
 
+    all_responsed = False
     elapsed_secs = 0
     while (time.time() < start_time + duration_s):
         refresh_rate = 0.5
         time.sleep(refresh_rate)
 
         if lm.agents_started:
+            ids = runtime_stats.keys()
+            responsed = sum([runtime_stats[id].count for id in ids])
+            if responsed == id_to - id_from + 1:
+                all_responsed = True
+
             elapsed_secs = time.time() - start_time
             if not reporter.refresh(elapsed_secs, refresh_rate):
+                break
+
+            if all_responsed:
                 break
 
     lm.stop(False)
@@ -147,6 +156,13 @@ def do_buy_task(id_from, id_to, duration):
         )
     )
 
+    ocount = 0
+    for t in tasks:
+        if t.result.find('order_id') >= 0:
+            ocount += 1
+            print(t.result)
+
+    print('下单成功的订单共有 %d 个' % ocount)
     sys.exit(0)
 
 

@@ -95,6 +95,9 @@ class TaskAgent(Thread):
                 if resp.code != 200:
                     self.error_count += 1
 
+                else:
+                    self.task.result = content
+
                 latency = (req_end_time - req_start_time)
                 connect_latency = (connect_end_time - req_start_time)
                 resp_bytes = len(content)
