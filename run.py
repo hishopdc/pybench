@@ -13,7 +13,10 @@ from tools import RuntimeReporter
 from dataman import *
 import config
 
-def reset_db():
+PROMOTION_QTY = 50
+STOCK = 100
+
+def reset_db(product_id, stock, qty, price):
     dm = DataMan(config.SQL_OPT)
     dm.open()
 
@@ -21,11 +24,11 @@ def reset_db():
     dm.fill_users(100)
     dm.fill_products(100)
     dm.fill_promotions(
-        68,
+        product_id,
         '2015-12-16 01:35:00',
         '2015-12-16 02:35:00',
-        50,
-        168.5
+        qty,
+        price
     )
 
     dm.close()
@@ -150,19 +153,23 @@ def do_buy_task(id_from, id_to, duration):
     avg_resp_time = agg_total_latency / agg_count
     avg_throughput = float(agg_count) / elapsed_secs
 
-    print(
-        '======== 系统容量测试成绩 ========\nREQS: %d\nQPS: %.2f' % (
-            agg_count - agg_error_count, avg_throughput
-        )
-    )
-
     ocount = 0
     for t in tasks:
         if t.result.find('order_id') >= 0:
             ocount += 1
-            print(t.result)
 
-    print('下单成功的订单共有 %d 个' % ocount)
+
+    print(
+        '======== 测试成绩 ========\nREQS: %d\nQPS: %.2f' % (
+            agg_count - agg_error_count, avg_throughput
+        )
+    )
+    print('活动数量 %d 个, 抢购成功 %d 个' % (PROMOTION_QTY, ocount)
+
+    overbuy = ocount - PROMOTION_QTY
+    if overbuy > 0:
+        print('！！！出现超卖 %d 件商品' % (overbuy))
+
     sys.exit(0)
 
 
