@@ -58,6 +58,15 @@ class DetailTaskRequest(TaskRequest):
     def verify(self, value):
         return True
 
+class BuyTaskRequest(TaskRequest):
+    def __init__(self, url, uid, prom_id):
+        body = 'uid=%d&prom_id=%d' % (uid, prom_id)
+        headers = {'Content-type': 'application/x-www-form-urlencoded'}
+        TaskRequest.__init__(self, url, 'POST', body, headers, 1, False)
+
+    def verify(self, value):
+        return True
+
 class TaskAgent(Thread):
     def __init__(self, id, runtime_stats, task, signal):
         Thread.__init__(self)
@@ -140,6 +149,7 @@ class TaskAgent(Thread):
             resp.code = e.code
             resp.msg = httplib.responses[e.code]
             resp.headers = dict(e.info())
+            print(e)
             content = ''
         except urllib2.URLError, e:
             connect_end_time = self.default_timer()
@@ -148,6 +158,14 @@ class TaskAgent(Thread):
             resp.msg = str(e.reason)
             resp.headers = {}
             content = ''
+        except IOError, e:
+            connect_end_time = self.default_timer()
+            resp = ErrorResponse()
+            resp.code = 0
+            resp.msg = str(e.strerror)
+            resp.headers = {}
+            content = ''
+
         req_end_time = self.default_timer()
 
         if self.trace_logging:
@@ -240,12 +258,12 @@ class LoadManager(Thread):
         print '启动完成 ...\n\n'
         self.agents_started = True
 
-    def stop(self):
+    def stop(self, wait = True):
         self.running = False
         for agent in self.agent_refs:
             agent.stop()
 
-        if WAITFOR_AGENT_FINISH:
+        if wait:
             keep_running = True
             while keep_running:
                 keep_running = False

@@ -1,11 +1,12 @@
 SQL_OPT = {
-    'server': '121.41.51.81',
+    'server': '10.168.169.4',
     'user': 'demo_user',
     'password': 'rqrLRL@372424',
     'db': 'demo'
 }
 
-RESET_DB = False
+RESET_DB = True
+BASE_URL = 'http://10.168.169.4:12800'
 
 AGENTS = 1
 DURATION = 60

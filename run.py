@@ -4,166 +4,37 @@
 from datetime import datetime
 import sys
 import time
+from optparse import OptionParser
 from threading import Thread
 from loader import LoadManager
 from loader import DetailTaskRequest
-from tools import *
+from loader import BuyTaskRequest
+from tools import RuntimeReporter
 from dataman import *
 import config
 
-class ProgressBar:
-    def __init__(self, duration, min_value=0, max_value=100, total_width=40):
-        self.prog_bar = '[]'
-        self.duration = duration
-        self.min = min_value
-        self.max = max_value
-        self.span = max_value - min_value
-        self.width = total_width
-        self.amount = 0
-        self.update_amount(0)
+def reset_db():
+    dm = DataMan(config.SQL_OPT)
+    dm.open()
 
-    def update_amount(self, new_amount=0):
-        if new_amount < self.min: new_amount = self.min
-        if new_amount > self.max: new_amount = self.max
-        self.amount = new_amount
+    dm.clear_all()
+    dm.fill_users(100)
+    dm.fill_products(100)
+    dm.fill_promotions(
+        68,
+        '2015-12-16 01:35:00',
+        '2015-12-16 02:35:00',
+        100,
+        168.5
+    )
 
-        diff_from_min = float(self.amount - self.min)
-        percent_done = (diff_from_min / float(self.span)) * 100.0
-        percent_done = round(percent_done)
-        percent_done = int(percent_done)
-
-        all_full = self.width - 2
-        num_hashes = (percent_done / 100.0) * all_full
-        num_hashes = int(round(num_hashes))
-
-        self.prog_bar = '[' + '#' * num_hashes + ' ' * (all_full - num_hashes) + ']'
-
-        percent_place = (len(self.prog_bar) / 2) - len(str(percent_done))
-        percent_string = str(percent_done) + '%'
-
-        self.prog_bar = self.prog_bar[0:percent_place] + (percent_string + self.prog_bar[percent_place + len(percent_string):])
-
-    def update_time(self, elapsed_secs):
-        self.update_amount((elapsed_secs / self.duration) * 100)
-        self.prog_bar += '  %ds/%ss' % (elapsed_secs, self.duration)
-
-    def __str__(self):
-        return str(self.prog_bar)
+    dm.close()
 
 
-class RuntimeReporter(object):
-    def __init__(self, duration, runtime_stats):
-        self.runtime_stats = runtime_stats
-        self.progress_bar = ProgressBar(duration)
-        self.last_count = 0
-        self.refreshed_once = False
-
-    def move_up(self, times):
-        for i in range(times):
-            esc = chr(27)
-            sys.stdout.write(esc + '[G' )
-            sys.stdout.write(esc + '[A' )
-
-    def refresh(self, elapsed_secs, refresh_rate):
-        ids = self.runtime_stats.keys()
-        agg_count = sum([self.runtime_stats[id].count for id in ids])
-        agg_total_latency = sum([self.runtime_stats[id].total_latency for id in ids])
-        agg_error_count = sum([self.runtime_stats[id].error_count for id in ids])
-        total_bytes_received = sum([self.runtime_stats[id].total_bytes for id in ids])
-
-        if agg_count > 0 and elapsed_secs > 0:
-            avg_resp_time = agg_total_latency / agg_count
-            avg_throughput = float(agg_count) / elapsed_secs
-            interval_count = agg_count - self.last_count
-            cur_throughput = float(interval_count) / refresh_rate
-            self.last_count = agg_count
-
-            if self.refreshed_once:
-                self.move_up(10)
-
-            self.progress_bar.update_time(elapsed_secs)
-
-            print self.progress_bar
-            print u'\n请求总数: %d\n错误: %d\n平均响应时间(毫秒): %d\n平均吞吐量(QPS): %.2f\n当前吞吐量: %.2f\n下行流量: %.1f KB\n%s' % (
-                agg_count, agg_error_count, avg_resp_time * 1000, avg_throughput, cur_throughput, total_bytes_received / 1000.0, 
-                '\n-------------------------------------------------')
-            self.refreshed_once = True
-
-
-def get_users(num):
-    users = []
-    rnd = RandomUtil()
-
-    for i in range(num):
-        u = {
-            'UserId': i + 1,
-            'UserName': 'u%d' % (i + 1),
-            'RealName': rnd.rand_name(),
-            'CellPhone': rnd.rand_mobile(),
-            'Address': rnd.rand_address()
-        }
-
-        users.append(u)
-
-    return users
-
-def get_products():
-    products = [
-        {
-            'ProductId': 1,
-            'ProductName': '二向箔',
-            'SaleCounts': 0,
-            'Stock': 100
-        }
-    ]
-
-    shenqi = [
-        u'东皇钟', u'轩辕剑', u'盘古斧', u'炼妖壶', u'昊天塔',
-        u'伏羲琴', u'神农鼎', u'崆峒印', u'昆仑镜', u'女娲石'
-    ]
-
-    for i in range(1000000):
-        products.append({
-            'ProductId': i + 2,
-            'ProductName': shenqi[i % len(shenqi)] + str(time.time()),
-            'SaleCounts': 0,
-            'Stock': 100
-        })
-
-    return products 
-
-def get_promotions():
-    promotions = [
-        {
-            'PromotionId': 1,
-            'ProductId': 1,
-            'StartTime': '2015-12-16 01:35:00',
-            'EndTime': '2015-12-16 02:35:00',
-            'Quantity': 5,
-            'Price': 100.0
-        }
-    ]
-
-    return promotions 
-
-def main():
-    reload(sys)
-    sys.setdefaultencoding("utf8")
-
+def do_detail_task(id_from, id_to, duration):
     tm_start = datetime.now()
     print('HiBench 开始评测...')
     print(tm_start.strftime('%Y-%m-%d %H:%M:%S.%f\n'))
-
-    users = get_users(2000)
-
-    if config.RESET_DB == True:
-        dm = DataMan(config.SQL_OPT)
-        dm.open()
-        dm.clear_all()
-        dm.fill_users(users)
-        dm.fill_products(get_products())
-        dm.fill_promotions(get_promotions())
-        dm.close()
 
     interval = config.INTERVAL
     rampup = config.RAMPUP
@@ -172,9 +43,9 @@ def main():
     error_queue = []
 
     tasks = []
-    for u in users:
-        url = 'http://10.168.163.110:12800/promotion/index.ashx'
-        url += "?uid=%d&prom_id=%d&time=%d" % (u['UserId'], 1, time.time())
+    for i in range(id_from, id_to + 1):
+        url = config.BASE_URL + '/promotion/index.ashx'
+        url += "?uid=%d&prom_id=%d&time=%d" % (i, 1, time.time())
 
         req = DetailTaskRequest(url)
         req.loop = True
@@ -189,22 +60,144 @@ def main():
     lm.start()
 
     start_time = time.time()
-    duration = 60 * 3
-    reporter = RuntimeReporter(duration, runtime_stats)
+    duration_s = duration * 60
+    reporter = RuntimeReporter(duration_s, runtime_stats)
 
-    while (time.time() < start_time + duration):
+    elapsed_secs = 0
+    while (time.time() < start_time + duration_s):
         refresh_rate = 0.5
         time.sleep(refresh_rate)
 
         if lm.agents_started:
             elapsed_secs = time.time() - start_time
-            reporter.refresh(elapsed_secs, refresh_rate)
+            if not reporter.refresh(elapsed_secs, refresh_rate):
+                break
 
-    lm.stop()
+    lm.stop(False)
+
+    ids = runtime_stats.keys()
+    agg_count = sum([runtime_stats[id].count for id in ids])
+    agg_error_count = sum([runtime_stats[id].error_count for id in ids])
+    agg_total_latency = sum([runtime_stats[id].total_latency for id in ids])
+
+    avg_resp_time = agg_total_latency / agg_count
+    avg_throughput = float(agg_count) / elapsed_secs
+
+    print(
+        '======== 系统容量测试成绩 ========\nREQS: %d\nQPS: %.2f' % (
+            agg_count - agg_error_count, avg_throughput
+        )
+    )
+
+    sys.exit(0)
+
+def do_buy_task(id_from, id_to, duration):
+    tm_start = datetime.now()
+    print('HiBench 开始评测...')
+    print(tm_start.strftime('%Y-%m-%d %H:%M:%S.%f\n'))
+
+    interval = config.INTERVAL
+    rampup = config.RAMPUP
+    log_msgs = config.LOG_MSGS
+    runtime_stats = {}
+    error_queue = []
+
+    tasks = []
+    for i in range(id_from, id_to + 1):
+        url = config.BASE_URL + '/promotion/buy.ashx'
+
+        req = BuyTaskRequest(url, i, 1)
+        tasks.append(req)
+
+    lm = LoadManager(
+        tasks, interval, rampup, log_msgs,
+        runtime_stats, error_queue
+    )
+
+    lm.setDaemon(True)
+    lm.start()
+
+    start_time = time.time()
+    duration_s = duration * 60
+    reporter = RuntimeReporter(duration_s, runtime_stats)
+
+    elapsed_secs = 0
+    while (time.time() < start_time + duration_s):
+        refresh_rate = 0.5
+        time.sleep(refresh_rate)
+
+        if lm.agents_started:
+            elapsed_secs = time.time() - start_time
+            if not reporter.refresh(elapsed_secs, refresh_rate):
+                break
+
+    lm.stop(False)
+
+    ids = runtime_stats.keys()
+    agg_count = sum([runtime_stats[id].count for id in ids])
+    agg_error_count = sum([runtime_stats[id].error_count for id in ids])
+    agg_total_latency = sum([runtime_stats[id].total_latency for id in ids])
+
+    avg_resp_time = agg_total_latency / agg_count
+    avg_throughput = float(agg_count) / elapsed_secs
+
+    print(
+        '======== 系统容量测试成绩 ========\nREQS: %d\nQPS: %.2f' % (
+            agg_count - agg_error_count, avg_throughput
+        )
+    )
+
+    sys.exit(0)
+
 
 if __name__ == '__main__':
+    reload(sys)
+    sys.setdefaultencoding("utf8")
+
+    usage = '用法: %prog [选项] 参数'
+    parser = OptionParser(usage)
+
+    parser.add_option(
+        '-R', '--reset', action = 'store_true',
+        dest = 'reset', default = False,
+        help = '重置数据库'
+    )
+    parser.add_option(
+        '-D', action = 'store_true',
+        dest = 'detail_task', default = False
+    )
+    parser.add_option(
+        '-B', action = 'store_true',
+        dest = 'buy_task', default = False
+    )
+
+    parser.add_option(
+        '-s', dest = 'id_from', type='int', help='起始用户ID'
+    )
+
+    parser.add_option(
+        '-t', dest = 'id_to', type='int', help='截止用户ID'
+    )
+
+    parser.add_option(
+        '-d', dest = 'duration', type='int', help='持续时间（分钟）'
+    )
+
+    (options, args) = parser.parse_args()
     try:
-        main()
+        if options.reset:
+            reset_db()
+            print('数据初始化完成！')
+
+        elif options.detail_task:
+            do_detail_task(options.id_from, options.id_to, options.duration)
+
+        elif options.buy_task:
+            do_buy_task(options.id_from, options.id_to, options.duration)
+
+        else:
+            parser.print_help()
+
     except KeyboardInterrupt:
-        print '\nInterrupt'
+        print '\n中止任务'
         sys.exit(1)
