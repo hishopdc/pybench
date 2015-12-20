@@ -164,7 +164,7 @@ def do_buy_task(id_from, id_to, duration):
             agg_count - agg_error_count, avg_throughput
         )
     )
-    print('活动数量 %d 个, 抢购成功 %d 个' % (PROMOTION_QTY, ocount)
+    print('活动数量 %d 个, 抢购成功 %d 个' % (PROMOTION_QTY, ocount))
 
     overbuy = ocount - PROMOTION_QTY
     if overbuy > 0:
