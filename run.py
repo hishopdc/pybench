@@ -216,6 +216,11 @@ if __name__ == '__main__':
             do_detail_task(options.id_from, options.id_to, options.duration)
 
         elif options.buy_task:
+            dm = DataMan(config.SQL_OPT)
+            dm.open()
+            dm.remove_orders()
+            dm.close()
+
             do_buy_task(options.id_from, options.id_to, options.duration)
 
         else:
