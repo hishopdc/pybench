@@ -20,6 +20,18 @@ class DataMan:
     def close(self):
         self.conn.close()
 
+    def remove_orders(self):
+        cursor = self.conn.cursor()
+        tables = [
+            'Users', 'Products', 'Promotions', 'Orders'
+        ]
+
+        cursor.execute(
+            'DELETE FROM [%s].[dbo].[Orders]' % (self.opt['db'])
+        )
+
+        self.conn.commit()
+
     def clear_all(self):
         cursor = self.conn.cursor()
         tables = [
