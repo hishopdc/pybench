@@ -169,9 +169,9 @@ def do_buy_task(id_from, id_to, duration):
     overbuy = ocount - PROMOTION_QTY
     if overbuy > 0:
         print('！！！出现超卖 %d 件商品' % (overbuy))
+        return False
 
-    sys.exit(0)
-
+    return True
 
 if __name__ == '__main__':
     reload(sys)
@@ -216,12 +216,14 @@ if __name__ == '__main__':
             do_detail_task(options.id_from, options.id_to, options.duration)
 
         elif options.buy_task:
-            dm = DataMan(config.SQL_OPT)
-            dm.open()
-            dm.remove_orders()
-            dm.close()
+            for i in range(20):
+                dm = DataMan(config.SQL_OPT)
+                dm.open()
+                dm.remove_orders()
+                dm.close()
 
-            do_buy_task(options.id_from, options.id_to, options.duration)
+                if not do_buy_task(options.id_from, options.id_to, options.duration):
+                    break
 
         else:
             parser.print_help()
