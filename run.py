@@ -201,9 +201,9 @@ def test_rush_buy(team, duration, promotion_id, qty, start_time):
         time.sleep(refresh_rate)
 
         if lm.agents_started:
-            ids = runtime_stats.keys()
-            responsed = sum([runtime_stats[id].count for id in ids])
-            if responsed == id_to - id_from + 1:
+            ids = stats.keys()
+            responsed = sum([stats[id].count for id in ids])
+            if responsed == 1000:
                 all_responsed = True
 
             elapsed_secs = time.time() - start_time
@@ -232,12 +232,12 @@ def test_rush_buy(team, duration, promotion_id, qty, start_time):
                 last_error = t.result
                 break
     else:
-        order_count = 0
+        orders = []
         for t in tasks:
             if 'order_id' in t.result:
-                order_count += 1
+                orders.append({'uid': t.uid, 'order_id': ''})
 
-    return agg_count, agg_error_count, avg_throughput, last_error, order_count
+    return agg_count, agg_error_count, avg_throughput, last_error, orders
 
 def run_team_test(team):
     team_intro(team)
@@ -291,6 +291,7 @@ def run_team_test(team):
     print('\n\n第三步：粉丝疯狂抢购')
 
     order_diff = 0
+    orders = None
     for r in range(3):
         print('\n第 %d 轮抢购' % (r + 1))
 
@@ -301,28 +302,35 @@ def run_team_test(team):
         dm.reset_users()
         dm.close()
 
-        (reqs, errors, qps, last_error, order_count) = test_rush_buy(team, 30, prom_id, qty, start_time)
-        order_diff = order_count - qty
+        (reqs, errors, qps, last_error, orders) = test_rush_buy(team, 30, prom_id, qty, start_time)
+        order_diff = len(orders) - qty
         if order_diff != 0:
             break
 
     print('\n得分情况')
     if errors == 0:
+        print('未检测到HTTP错误：+5')
+        score += 5
+
         if order_diff == 0:
             print('未出现超卖或剩余：+15')
             score += 15
         else:
             print('出现【%s %d 件】情况，此项不能得分' % ('超卖' if order_diff > 0 else '剩余', abs(order_diff)))
+            print('关键性节点错误，测试中止')
+            return score
 
-        print('未检测到HTTP错误：+5')
-        score += 5
     else:
-        if last_error.find('活动尚未开始，应当返回 {"error": "not started"}') >= 0:
+        if last_error.find('购买失败，应当返回订单编号等信息或抢光') >= 0:
             print('未检测到HTTP错误：+5')
             score += 5
 
         print('\n%s' % last_error)
+        print('关键性节点错误，测试中止')
+        return score
 
+    print('完成所有测试内容，开始计算总分...')
+    return score
 
 def move_up(times):
     for i in range(times):
@@ -361,11 +369,13 @@ if __name__ == '__main__':
         elif options.team_mode:
             if options.team_number != -1:
                 team = config.TEAMS[options.team_number]
-                run_team_test(team)
+                score = run_team_test(team)
+                print('测试结束，当前团队得分 %d' % score)
 
             else:
                 for team in config.TEAMS:
-                    run_team_test(team)
+                    score = run_team_test(team)
+                    print('测试结束，当前团队得分 %d' % score)
                     time.sleep(1)
 
         else:
