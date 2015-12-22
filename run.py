@@ -282,7 +282,7 @@ def run_team_test(team):
     print('\n\n第三步：粉丝疯狂抢购')
 
     order_diff = 0
-    for r in range(20):
+    for r in range(3):
         print('\n第 %d 轮抢购' % (r + 1))
 
         dm = DataMan(config.SQL_OPT)
@@ -292,9 +292,9 @@ def run_team_test(team):
         dm.reset_users()
         dm.close()
 
-        (reqs, errors, qps, last_error, order_count) = test_rush_buy(team, 5, prom_id, qty, start_time)
+        (reqs, errors, qps, last_error, order_count) = test_rush_buy(team, 30, prom_id, qty, start_time)
         order_diff = order_count - qty
-        if order_diff != 0
+        if order_diff != 0:
             break
 
     print('\n得分情况')
@@ -302,8 +302,8 @@ def run_team_test(team):
         if order_diff == 0:
             print('未出现超卖或剩余：+15')
             score += 15
-        else
-            print('出现【%s】情况，此项不能得分' % ('超卖' if order_diff > 0 else '剩余', abs(order_diff))
+        else:
+            print('出现【%s %d 件】情况，此项不能得分' % ('超卖' if order_diff > 0 else '剩余', abs(order_diff)))
 
         print('未检测到HTTP错误：+5')
         score += 5
