@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import json
+
 class TaskRequest():
     def __init__(
         self, url, method = 'GET', body = '', headers = None,
@@ -93,3 +95,16 @@ class NormalPayTask(TaskRequest):
 
         msg = '' if result else '支付失败，应当返回订单支付信息、支付超时、已经支付等'
         return result, msg
+
+class RemainPageTask(TaskRequest):
+    def __init__(self, url, avl_qty):
+        TaskRequest.__init__(self, url, loop = True)
+        self.qty = avl_qty
+
+    def verify(self, value):
+        prom = json.loads(value)
+        result = str(prom['avl_qty']) == str(self.qty)
+        msg = '' if result else '剩余可抢数量错误，正确应为 %d' % self.qty
+
+        return result, msg
+

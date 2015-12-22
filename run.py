@@ -305,6 +305,58 @@ def test_rush_pay(team, duration, orders):
 
     return agg_count, agg_error_count, avg_throughput, last_error, paid_orders
 
+def test_remain_detail(team, duration, promotion_id, remain):
+    tasks = []
+    for uid in range(1, 1000):
+        url = team['app'] + '/promotion/index.ashx'
+        url += "?uid=%d&prom_id=%d&rnd=%d" % (uid, promotion_id, time.time())
+
+        tasks.append(
+            RemainPageTask(url, remain)
+        )
+
+    stats = {}
+    errors = []
+
+    lm = LoadManager(tasks, stats, errors)
+    lm.setDaemon(True)
+    lm.start()
+
+    start_time = time.time()
+    reporter = RuntimeReporter(duration, stats)
+
+    elapsed_secs = 0
+    while (time.time() < start_time + duration):
+        refresh_rate = 0.5
+        time.sleep(refresh_rate)
+
+        if lm.agents_started:
+            elapsed_secs = time.time() - start_time
+            if not reporter.refresh(elapsed_secs, refresh_rate):
+                print('测试失败！')
+                break
+
+    print('请稍等，正在停止所有虚拟用户操作...')
+    lm.stop(True)
+
+    ids = stats.keys()
+    agg_count = sum([stats[id].count for id in ids])
+    agg_error_count = sum([stats[id].error_count for id in ids])
+    agg_total_latency = sum([stats[id].total_latency for id in ids])
+
+    avg_resp_time = agg_total_latency / agg_count
+    avg_throughput = float(agg_count) / elapsed_secs
+
+    last_error = None
+    if agg_error_count > 0:
+        for t in tasks:
+            if t.error:
+                last_error = t.result
+                break
+
+
+    return agg_count, agg_error_count, avg_throughput, last_error
+
 def run_team_test(team):
     team_intro(team)
 
@@ -395,12 +447,15 @@ def run_team_test(team):
         print('关键性节点错误，测试中止')
         return score
 
+    buy_time = datetime.now()
+
     print('\n\n第四步：铁粉买买买，假粉反悔了')
     part = orders[0: qty / 2]
     print('\n共抢到 %d 个订单，铁粉支付 %d 个订单' % (len(orders), len(part)))
     (reqs, errors, qps, last_error, paid_orders) = test_rush_pay(team, 5, part)
     pay_diff = len(paid_orders) - len(part)
 
+    print('\n得分情况')
     if errors == 0:
         print('未检测到HTTP错误：+5')
         score += 5
@@ -422,7 +477,31 @@ def run_team_test(team):
         print('关键性节点错误，测试中止')
         return score
 
-    print('完成所有测试内容，开始计算总分...')
+    print('\n')
+    el = (datetime.now() - buy_time).total_seconds()
+    while el <= (60 + 5):
+        el = (datetime.now() - buy_time).total_seconds()
+        move_up(2)
+        print(u'\n支付即将超时倒计时: %4d' % (60 + 5 - el))
+        time.sleep(1)
+
+    remain = qty - len(paid_orders)
+    print('\n\n第五步：没抢到的铁粉们又等到了春天')
+    (reqs, errors, qps, last_error) = test_remain_detail(team, 5, prom_id, remain)
+
+    print('\n得分情况')
+    if errors == 0:
+        print('可抢数量正确：+5')
+        print('未检测到HTTP错误：+5')
+        score += 10
+    else:
+        if last_error.find('剩余可抢数量错误，正确应为') >= 0:
+            print('未检测到HTTP错误：+5')
+            score += 5
+
+        print('\n%s' % last_error)
+
+    print('\n完成所有测试内容，开始计算总分...')
     return score
 
 def move_up(times):
