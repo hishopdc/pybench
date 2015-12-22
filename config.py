@@ -10,6 +10,13 @@ SQL_OPT = {
 
 TEAMS = [
     {
+        'name': '1024',
+        'captain': '廖日龙',
+        'members': '廖日龙、刘礼义、 罗周宇',
+        'slogan': '404',
+        'app': 'http://192.168.1.118:18007'
+    },
+    {
         'name': '苍狼',
         'captain': '周新星',
         'members': '周新星、蒯伟、杨彬',

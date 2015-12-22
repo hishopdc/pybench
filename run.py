@@ -189,7 +189,7 @@ def team_intro(team):
 def create_promotion_task():
     print('\n开始设置抢购活动')
 
-    advance = 2
+    advance = -2
     start_time = datetime.now() + timedelta(0, advance * 60)
     end_time = start_time + timedelta(0, (5 + advance) * 60)
 
@@ -216,7 +216,7 @@ def create_promotion_task():
 
 def test_advance_detail(team, duration, promotion_id, qty, start_time):
     tasks = []
-    for uid in range(1, 100):
+    for uid in range(1, 11):
         url = team['app'] + '/promotion/index.ashx'
         url += "?uid=%d&prom_id=%d&rnd=%d" % (uid, promotion_id, time.time())
 
@@ -257,7 +257,6 @@ def test_advance_detail(team, duration, promotion_id, qty, start_time):
     avg_throughput = float(agg_count) / elapsed_secs
 
     last_error = None
-    print(agg_error_count)
     if agg_error_count > 0:
         for t in tasks:
             if t.error:
@@ -267,14 +266,93 @@ def test_advance_detail(team, duration, promotion_id, qty, start_time):
 
     return agg_count, agg_error_count, avg_throughput, last_error
 
+def test_advance_buy(team, duration, promotion_id, qty, start_time):
+    tasks = []
+    for uid in range(1, 11):
+        url = team['app'] + '/promotion/buy.ashx'
+        url += "?uid=%d&prom_id=%d&rnd=%d" % (uid, promotion_id, time.time())
+
+        tasks.append(
+            AdvanceBuyTask(url, uid, promotion_id)
+        )
+
+    stats = {}
+    errors = []
+
+    lm = LoadManager(tasks, stats, errors)
+    lm.setDaemon(True)
+    lm.start()
+
+    start_time = time.time()
+    reporter = RuntimeReporter(duration, stats)
+
+    elapsed_secs = 0
+    while (time.time() < start_time + duration):
+        refresh_rate = 0.5
+        time.sleep(refresh_rate)
+
+        if lm.agents_started:
+            elapsed_secs = time.time() - start_time
+            if not reporter.refresh(elapsed_secs, refresh_rate):
+                print('测试失败！')
+                break
+
+    print('请稍等，正在停止所有虚拟用户操作...')
+    lm.stop(True)
+
+    ids = stats.keys()
+    agg_count = sum([stats[id].count for id in ids])
+    agg_error_count = sum([stats[id].error_count for id in ids])
+    agg_total_latency = sum([stats[id].total_latency for id in ids])
+
+    avg_resp_time = agg_total_latency / agg_count
+    avg_throughput = float(agg_count) / elapsed_secs
+
+    last_error = None
+    if agg_error_count > 0:
+        for t in tasks:
+            if t.error:
+                last_error = t.result
+                break
+
+    return agg_count, agg_error_count, avg_throughput, last_error
+
 def run_team_test(team):
     team_intro(team)
     (prom_id, prod_id, qty, price, start_time, end_time) = create_promotion_task()
-    print('\nHiBench “活动详情”加压测试...')
+
+    score = 0
+
+    print('\n\n第一步：活动开始前详情页被粉丝疯狂刷新')
     (reqs, errors, qps, last_error) = test_advance_detail(team, 5, prom_id, qty, start_time)
 
-    if errors > 0:
-        print('出现错误，未通过测试！\n%s' % last_error)
+    print('\n得分情况')
+    if errors == 0:
+        print('所有活动信息返回正确：+5')
+        print('未检测到HTTP错误：+5')
+        score += 10
+    else:
+        if last_error.find('未找到匹配的活动信息') >= 0:
+            print('未检测到HTTP错误：+5')
+            score += 5
+
+        print('\n%s' % last_error)
+
+    print('\n\n第二步：活动开始前黑客试图恶意刷单')
+    (reqs, errors, qps, last_error) = test_advance_buy(team, 5, prom_id, qty, start_time)
+
+    print('\n得分情况')
+    if errors == 0:
+        print('全部返回“活动未开始”：+5')
+        print('未检测到HTTP错误：+5')
+        score += 10
+    else:
+        if last_error.find('活动尚未开始，应当返回 {"error": "not started"}') >= 0:
+            print('未检测到HTTP错误：+5')
+            score += 5
+
+        print('\n%s' % last_error)
+
 
 if __name__ == '__main__':
     reload(sys)

@@ -37,9 +37,11 @@ class DetailPageTask(TaskRequest):
         self.qty = avl_qty
 
     def verify(self, value):
-        return value.find(self.start_time) >= 0
+        result = value.find(self.start_time) >= 0
+        msg = '' if result else '未找到匹配的活动信息'
+        return result, msg
 
-class BuyTaskRequest(TaskRequest):
+class AdvanceBuyTask(TaskRequest):
     def __init__(self, url, uid, prom_id):
         self.uid = uid
         self.prom_id = prom_id
@@ -50,6 +52,8 @@ class BuyTaskRequest(TaskRequest):
         TaskRequest.__init__(self, url, 'POST', body, headers, 1, False)
 
     def verify(self, value):
-        return True
+        result = value.find('not started') >= 0
+        msg = '' if result else '活动尚未开始，应当返回 {"error": "not started"}'
+        return result, msg
 
 

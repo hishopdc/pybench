@@ -57,13 +57,15 @@ class TaskAgent(Thread):
                     self.task.error = resp.code
                     self.task.result = content
 
-                elif not self.task.verify(content):
-                    self.error_count += 1
-                    self.task.error = -1000
-                    self.task.result = '返回值未通过验证:\n' + content
-
                 else:
-                    self.task.result = content
+                    (r, emsg) = self.task.verify(content)
+                    if not r:
+                        self.error_count += 1
+                        self.task.error = -1000
+                        self.task.result = '发生错误：\n【%s】\n实际返回:\n%s' % (emsg, content)
+
+                    else:
+                        self.task.result = content
 
                 latency = (req_end_time - req_start_time)
                 connect_latency = (connect_end_time - req_start_time)
