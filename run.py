@@ -235,7 +235,7 @@ def test_rush_buy(team, duration, promotion_id, qty, start_time):
         orders = []
         for t in tasks:
             if 'order_id' in t.result:
-                orders.append({'uid': t.uid, 'order_id': ''})
+                orders.append({'uid': t.uid, 'order_id': r.result})
 
     return agg_count, agg_error_count, avg_throughput, last_error, orders
 
@@ -292,7 +292,7 @@ def run_team_test(team):
 
     order_diff = 0
     orders = None
-    for r in range(3):
+    for r in range(1):
         print('\n第 %d 轮抢购' % (r + 1))
 
         dm = DataMan(config.SQL_OPT)
@@ -328,6 +328,9 @@ def run_team_test(team):
         print('\n%s' % last_error)
         print('关键性节点错误，测试中止')
         return score
+
+    for o in orders:
+        print(o)
 
     print('完成所有测试内容，开始计算总分...')
     return score
