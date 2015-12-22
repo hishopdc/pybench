@@ -16,6 +16,7 @@ import time
 import urllib2
 import urlparse
 from threading import Thread
+from task import *
 import config
 
 GENERATE_RESULTS = config.GENERATE_RESULTS
@@ -24,56 +25,6 @@ HTTP_DEBUG = config.HTTP_DEBUG
 SHUFFLE_TESTCASES = config.SHUFFLE_TESTCASES
 WAITFOR_AGENT_FINISH = config.WAITFOR_AGENT_FINISH
 SOCKET_TIMEOUT = config.SOCKET_TIMEOUT
-
-class TaskRequest():
-    def __init__(self, url='http://localhost', method='GET', body='',
-                 headers=None, repeat=1, loop = False):
-        self.url = url
-        self.method = method
-        self.body = body
-        self.repeat = repeat
-        self.loop = loop
-        self.error = None
-
-        if headers:
-            self.headers = headers
-        else:
-            self.headers = {}
-
-        if 'user-agent' not in [header.lower() for header in self.headers]:
-            self.add_header('User-Agent', 'Mozilla/4.0 (compatible; Pylot)')
-
-        if 'connection' not in [header.lower() for header in self.headers]:
-            self.add_header('Connection', 'close')
-
-        if 'accept-encoding' not in [header.lower() for header in self.headers]:
-            self.add_header('Accept-Encoding', 'identity') 
-
-    def add_header(self, header_name, value):
-        self.headers[header_name] = value
-
-class NotStartTask(TaskRequest):
-    def __init__(self, url='http://localhost/test.htm', method='GET', body='',
-                 headers=None, repeat=1, loop = False):
-        TaskRequest.__init__(self, url, method, body, headers, repeat, loop)
-
-        self.start_time = None
-
-    def verify(self, value):
-        return value.find(self.start_time) >= 0
-
-class BuyTaskRequest(TaskRequest):
-    def __init__(self, url, uid, prom_id):
-        self.uid = uid
-        self.prom_id = prom_id
-        self.result = None
-
-        body = 'uid=%d&prom_id=%d' % (uid, prom_id)
-        headers = {'Content-type': 'application/x-www-form-urlencoded'}
-        TaskRequest.__init__(self, url, 'POST', body, headers, 1, False)
-
-    def verify(self, value):
-        return True
 
 class TaskAgent(Thread):
     def __init__(self, id, runtime_stats, task, signal):
@@ -104,7 +55,6 @@ class TaskAgent(Thread):
                 if resp.code != 200:
                     self.error_count += 1
                     self.task.error = resp.code
-                    print('http error: %d' % resp.code)
                     self.task.result = content
 
                 elif not self.task.verify(content):
@@ -185,19 +135,17 @@ class TaskAgent(Thread):
         if self.trace_logging:
             self.log_http_msgs(req, request, resp, content)
 
+
         return (resp, content, req_start_time, req_end_time, connect_end_time)
 
 
 class LoadManager(Thread):
-    def __init__(self, tasks, interval, rampup, log_msgs, runtime_stats, error_queue, output_dir=None, test_name=None):
+    def __init__(self, tasks, runtime_stats, error_queue, output_dir = None, test_name = None):
         Thread.__init__(self)
         socket.setdefaulttimeout(SOCKET_TIMEOUT)
         self.running = True
         self.tasks = tasks
         self.num_agents = len(tasks)
-        self.interval = interval
-        self.rampup = rampup
-        self.log_msgs = log_msgs
         self.runtime_stats = runtime_stats
         self.error_queue = error_queue
         self.test_name = test_name
@@ -213,13 +161,6 @@ class LoadManager(Thread):
 
         for i in range(self.num_agents):
             self.runtime_stats[i] = StatCollection(0, '', 0, 0, 0, 0, 0, 0)
-
-        self.workload = {
-            'num_agents': self.num_agents,
-            'interval': interval * 1000,
-            'rampup': rampup,
-            'start_epoch': time.mktime(time.localtime())
-        }
 
         self.results_queue = Queue.Queue()
         self.agent_refs = []
@@ -249,9 +190,6 @@ class LoadManager(Thread):
         print('-------------------------------------------------')
         print('开始启动并发测试')
         for i in range(self.num_agents):
-            spacing = float(self.rampup) / float(self.num_agents)
-            if i > 0:
-                time.sleep(spacing)
             if self.running:
                 agent = TaskAgent(i, self.runtime_stats, self.tasks[i], signal)
                 agent.start()
@@ -289,24 +227,6 @@ class LoadManager(Thread):
                         time.sleep(0.1)
 
         self.results_writer.stop()
-
-#        if GENERATE_RESULTS:
-#            self.store_for_post_processing(self.output_dir, self.runtime_stats, self.workload)  
-#            self.results_gen = results.ResultsGenerator(self.output_dir, self.test_name)
-#            self.results_gen.setDaemon(True)
-#            self.results_gen.start()
-
-
-    def add_req(self, req):
-        self.msg_queue.append(req)
-
-    def store_for_post_processing(self, dir, runtime_stats, workload):
-        fh = open(dir + '/agent_detail.dat', 'w')
-        pickle.dump(runtime_stats, fh)
-        fh.close()
-        fh = open(dir + '/workload_detail.dat', 'w')
-        pickle.dump(workload, fh)
-        fh.close()
 
 class ErrorResponse():
     def __init__(self):

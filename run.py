@@ -7,14 +7,13 @@ import time
 from optparse import OptionParser
 from threading import Thread
 from loader import LoadManager
-from loader import NotStartTask
-from loader import BuyTaskRequest
 from tools import RuntimeReporter
 from dataman import *
+from task import *
 import config
 
 PRODUCT_ID = 86
-PROMOTION_ID = 1
+PROMOTION_ID = config.PROMOTION_ID
 PROMOTION_QTY = 50
 PROMOTION_PRICE = 168.5
 STOCK = 100
@@ -178,6 +177,105 @@ def do_buy_task(id_from, id_to, duration):
 
     return True
 
+def team_intro(team):
+    print('<=========【%s】队闪亮登场 =========>' % team['name'])
+    time.sleep(0.3)
+    print('队长 - %s' % team['captain'])
+    time.sleep(0.3)
+    print('队员 - %s' % team['members'])
+    time.sleep(0.3)
+    print('号号- %s' % team['slogan'])
+
+def create_promotion_task():
+    print('\n开始设置抢购活动')
+
+    advance = 2
+    start_time = datetime.now() + timedelta(0, advance * 60)
+    end_time = start_time + timedelta(0, (5 + advance) * 60)
+
+    dm = DataMan(config.SQL_OPT)
+    dm.open()
+    dm.remove_orders()
+    dm.remove_promotions()
+    dm.reset_product(PRODUCT_ID)
+    dm.reset_users()
+    dm.create_promotion(
+        PROMOTION_ID, PRODUCT_ID, PROMOTION_QTY,
+        PROMOTION_PRICE, start_time, end_time
+    )
+    dm.close()
+
+    print('活动ID: %d' % PROMOTION_ID)
+    print('产品ID: %d' % PRODUCT_ID)
+    print('数量: %d' % PROMOTION_QTY)
+    print('价格: %.2f' % PROMOTION_PRICE)
+    print('开始时间: %s' % start_time.strftime('%Y-%m-%d %H:%M:%S'))
+    print('结束时间: %s' % end_time.strftime('%Y-%m-%d %H:%M:%S'))
+
+    return PROMOTION_ID, PRODUCT_ID, PROMOTION_QTY, PROMOTION_PRICE, start_time, end_time
+
+def test_advance_detail(team, duration, promotion_id, qty, start_time):
+    tasks = []
+    for uid in range(1, 100):
+        url = team['app'] + '/promotion/index.ashx'
+        url += "?uid=%d&prom_id=%d&rnd=%d" % (uid, promotion_id, time.time())
+
+        tasks.append(
+            DetailPageTask(url, start_time.strftime('%Y-%m-%d %H:%M:%S'), qty)
+        )
+
+    stats = {}
+    errors = []
+
+    lm = LoadManager(tasks, stats, errors)
+    lm.setDaemon(True)
+    lm.start()
+
+    start_time = time.time()
+    reporter = RuntimeReporter(duration, stats)
+
+    elapsed_secs = 0
+    while (time.time() < start_time + duration):
+        refresh_rate = 0.5
+        time.sleep(refresh_rate)
+
+        if lm.agents_started:
+            elapsed_secs = time.time() - start_time
+            if not reporter.refresh(elapsed_secs, refresh_rate):
+                print('测试失败！')
+                break
+
+    print('请稍等，正在停止所有虚拟用户操作...')
+    lm.stop(True)
+
+    ids = stats.keys()
+    agg_count = sum([stats[id].count for id in ids])
+    agg_error_count = sum([stats[id].error_count for id in ids])
+    agg_total_latency = sum([stats[id].total_latency for id in ids])
+
+    avg_resp_time = agg_total_latency / agg_count
+    avg_throughput = float(agg_count) / elapsed_secs
+
+    last_error = None
+    print(agg_error_count)
+    if agg_error_count > 0:
+        for t in tasks:
+            if t.error:
+                last_error = t.result
+                break
+
+
+    return agg_count, agg_error_count, avg_throughput, last_error
+
+def run_team_test(team):
+    team_intro(team)
+    (prom_id, prod_id, qty, price, start_time, end_time) = create_promotion_task()
+    print('\nHiBench “活动详情”加压测试...')
+    (reqs, errors, qps, last_error) = test_advance_detail(team, 5, prom_id, qty, start_time)
+
+    if errors > 0:
+        print('出现错误，未通过测试！\n%s' % last_error)
+
 if __name__ == '__main__':
     reload(sys)
     sys.setdefaultencoding("utf8")
@@ -198,6 +296,10 @@ if __name__ == '__main__':
         '-B', action = 'store_true',
         dest = 'buy_task', default = False
     )
+    parser.add_option(
+        '-T', action = 'store_true',
+        dest = 'team_mode', default = False
+    )
 
     parser.add_option(
         '-s', dest = 'id_from', type='int', help='起始用户ID'
@@ -211,11 +313,25 @@ if __name__ == '__main__':
         '-d', dest = 'duration', type='float', help='持续时间（分钟）'
     )
 
+    parser.add_option(
+        '-n', dest = 'team_number', type='int', help='团队编号'
+    )
+
     (options, args) = parser.parse_args()
     try:
         if options.reset:
             reset_db()
             print('数据初始化完成！')
+
+        elif options.team_mode:
+            if options.team_number != None:
+                team = config.TEAMS[options.team_number]
+                run_team_test(team)
+
+            else:
+                for team in config.TEAMS:
+                    run_team_test(team)
+                    time.sleep(1)
 
         elif options.detail_task:
             start_time = datetime.now()

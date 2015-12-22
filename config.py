@@ -1,12 +1,33 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 SQL_OPT = {
-    'server': '10.168.169.4',
-    'user': 'demo_user',
-    'password': 'rqrLRL@372424',
-    'db': 'demo'
+    'server': '192.168.1.118',
+    'user': 'bench_user',
+    'password': 'qwe123123',
+    'db': 'bench'
 }
 
+TEAMS = [
+    {
+        'name': '苍狼',
+        'captain': '周新星',
+        'members': '周新星、蒯伟、杨彬',
+        'slogan': '众志成城，挑战自我，勇者无畏，所向披靡',
+        'app': 'http://192.168.1.118:18003'
+    },
+    {
+        'name': '火狼',
+        'captain': '刘磊',
+        'members': '刘磊 、朱宇、王梓靖',
+        'slogan': '火舞春秋 狼战天下',
+        'app': 'http://192.168.1.118:18008'
+    }
+]
+
+PROMOTION_ID = 5
 RESET_DB = True
-BASE_URL = 'http://10.168.169.4:12800'
+BASE_URL = 'http://10.168.169.4:12803'
 
 AGENTS = 1
 DURATION = 60
