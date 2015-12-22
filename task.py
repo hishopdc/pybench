@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+class TaskRequest():
+    def __init__(
+        self, url, method = 'GET', body = '', headers = None,
+        repeat = 1, loop = False):
+
+        self.url = url
+        self.method = method
+        self.body = body
+        self.repeat = repeat
+        self.loop = loop
+        self.error = None
+
+        if headers:
+            self.headers = headers
+        else:
+            self.headers = {}
+
+        if 'user-agent' not in [header.lower() for header in self.headers]:
+            self.add_header('User-Agent', 'Mozilla/4.0 (compatible; Pylot)')
+
+        if 'connection' not in [header.lower() for header in self.headers]:
+            self.add_header('Connection', 'close')
+
+        if 'accept-encoding' not in [header.lower() for header in self.headers]:
+            self.add_header('Accept-Encoding', 'identity') 
+
+    def add_header(self, header_name, value):
+        self.headers[header_name] = value
+
+class DetailPageTask(TaskRequest):
+    def __init__(self, url, start_time, avl_qty):
+        TaskRequest.__init__(self, url, loop = True)
+        self.start_time = start_time
+        self.qty = avl_qty
+
+    def verify(self, value):
+        return value.find(self.start_time) >= 0
+
+class BuyTaskRequest(TaskRequest):
+    def __init__(self, url, uid, prom_id):
+        self.uid = uid
+        self.prom_id = prom_id
+        self.result = None
+
+        body = 'uid=%d&prom_id=%d' % (uid, prom_id)
+        headers = {'Content-type': 'application/x-www-form-urlencoded'}
+        TaskRequest.__init__(self, url, 'POST', body, headers, 1, False)
+
+    def verify(self, value):
+        return True
+
+
