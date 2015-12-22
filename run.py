@@ -4,6 +4,7 @@
 from datetime import datetime
 import sys
 import time
+import json
 from optparse import OptionParser
 from threading import Thread
 from loader import LoadManager
@@ -178,7 +179,6 @@ def test_rush_buy(team, duration, promotion_id, qty, start_time):
     tasks = []
     for uid in range(1, 1001):
         url = team['app'] + '/promotion/buy.ashx'
-        url += "?uid=%d&prom_id=%d&rnd=%d" % (uid, promotion_id, time.time())
 
         tasks.append(
             NormalBuyTask(url, uid, promotion_id)
@@ -235,9 +235,75 @@ def test_rush_buy(team, duration, promotion_id, qty, start_time):
         orders = []
         for t in tasks:
             if 'order_id' in t.result:
-                orders.append({'uid': t.uid, 'order_id': r.result})
+                o = json.loads(t.result)
+                orders.append({'uid': t.uid, 'order_id': o['order_id']})
 
     return agg_count, agg_error_count, avg_throughput, last_error, orders
+
+def test_rush_pay(team, duration, orders):
+    tasks = []
+    for o in orders:
+        url = team['app'] + '/promotion/pay.ashx'
+
+        tasks.append(
+            NormalPayTask(url, o['uid'], o['order_id'])
+        )
+
+    stats = {}
+    errors = []
+
+    lm = LoadManager(tasks, stats, errors)
+    lm.setDaemon(True)
+    lm.start()
+
+    start_time = time.time()
+    reporter = RuntimeReporter(duration, stats)
+
+    all_responsed = False
+    elapsed_secs = 0
+    while (time.time() < start_time + duration):
+        refresh_rate = 0.5
+        time.sleep(refresh_rate)
+
+        if lm.agents_started:
+            ids = stats.keys()
+            responsed = sum([stats[id].count for id in ids])
+            if responsed == 1000:
+                all_responsed = True
+
+            elapsed_secs = time.time() - start_time
+            if not reporter.refresh(elapsed_secs, refresh_rate):
+                print('测试失败！')
+                break
+
+            if all_responsed:
+                break
+
+    print('请稍等，正在停止所有虚拟用户操作...')
+    lm.stop(True)
+
+    ids = stats.keys()
+    agg_count = sum([stats[id].count for id in ids])
+    agg_error_count = sum([stats[id].error_count for id in ids])
+    agg_total_latency = sum([stats[id].total_latency for id in ids])
+
+    avg_resp_time = agg_total_latency / agg_count
+    avg_throughput = float(agg_count) / elapsed_secs
+
+    last_error = None
+    if agg_error_count > 0:
+        for t in tasks:
+            if t.error:
+                last_error = t.result
+                break
+    else:
+        paid_orders = []
+        for t in tasks:
+            if 'order_id' in t.result:
+                o = json.loads(t.result)
+                paid_orders .append({'uid': t.uid, 'order_id': o['order_id']})
+
+    return agg_count, agg_error_count, avg_throughput, last_error, paid_orders
 
 def run_team_test(team):
     team_intro(team)
@@ -329,8 +395,32 @@ def run_team_test(team):
         print('关键性节点错误，测试中止')
         return score
 
-    for o in orders:
-        print(o)
+    print('\n\n第四步：铁粉买买买，假粉反悔了')
+    part = orders[0: qty / 2]
+    print('\n共抢到 %d 个订单，铁粉支付 %d 个订单' % (len(orders), len(part)))
+    (reqs, errors, qps, last_error, paid_orders) = test_rush_pay(team, 5, part)
+    pay_diff = len(paid_orders) - len(part)
+
+    if errors == 0:
+        print('未检测到HTTP错误：+5')
+        score += 5
+
+        if pay_diff == 0:
+            print('铁粉订单均正常支付：+15')
+            score += 15
+        else:
+            print('出现部分未正常支付情况，此项不能得分')
+            print('关键性节点错误，测试中止')
+            return score
+
+    else:
+        if last_error.find('支付失败，应当返回订单支付信息、支付超时、已经支付等') >= 0:
+            print('未检测到HTTP错误：+5')
+            score += 5
+
+        print('\n%s' % last_error)
+        print('关键性节点错误，测试中止')
+        return score
 
     print('完成所有测试内容，开始计算总分...')
     return score

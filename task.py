@@ -73,3 +73,23 @@ class NormalBuyTask(TaskRequest):
 
         msg = '' if result else '购买失败，应当返回订单编号等信息或抢光'
         return result, msg
+
+class NormalPayTask(TaskRequest):
+    def __init__(self, url, uid, order_id):
+        self.uid = uid
+        self.order_id = order_id
+        self.result = None
+
+        body = 'uid=%d&order_id=%s' % (uid, order_id)
+        headers = {'Content-type': 'application/x-www-form-urlencoded'}
+        TaskRequest.__init__(self, url, 'POST', body, headers, 1, False)
+
+    def verify(self, value):
+        result = value.find('order_id') >= 0
+        if not result:
+            result = value.find('close_time') >= 0
+            if not result:
+                result = value.find('already paid') >= 0
+
+        msg = '' if result else '支付失败，应当返回订单支付信息、支付超时、已经支付等'
+        return result, msg
