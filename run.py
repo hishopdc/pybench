@@ -186,12 +186,11 @@ def team_intro(team):
     time.sleep(0.3)
     print('号号- %s' % team['slogan'])
 
-def create_promotion_task():
+def create_promotion_task(now, delay):
     print('\n开始设置抢购活动')
 
-    advance = -2
-    start_time = datetime.now() + timedelta(0, advance * 60)
-    end_time = start_time + timedelta(0, (5 + advance) * 60)
+    start_time = now + timedelta(0, delay)
+    end_time = start_time + timedelta(0, 5 * 60 + delay)
 
     dm = DataMan(config.SQL_OPT)
     dm.open()
@@ -319,7 +318,10 @@ def test_advance_buy(team, duration, promotion_id, qty, start_time):
 
 def run_team_test(team):
     team_intro(team)
-    (prom_id, prod_id, qty, price, start_time, end_time) = create_promotion_task()
+
+    now = datetime.now()
+    delay = 15
+    (prom_id, prod_id, qty, price, start_time, end_time) = create_promotion_task(now, delay)
 
     score = 0
 
@@ -353,6 +355,22 @@ def run_team_test(team):
 
         print('\n%s' % last_error)
 
+    print('\n')
+    el = (datetime.now() - now).total_seconds()
+    while el <= (delay + 5):
+        el = (datetime.now() - now).total_seconds()
+        move_up(2)
+        print(u'\n活动开始倒计时: %4d' % (delay + 5 - el))
+        time.sleep(1)
+
+    print('================ 活动正式开始 ================')
+
+
+def move_up(times):
+    for i in range(times):
+        esc = chr(27)
+        sys.stdout.write(esc + '[G' )
+        sys.stdout.write(esc + '[A' )
 
 if __name__ == '__main__':
     reload(sys)
