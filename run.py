@@ -43,7 +43,7 @@ def team_intro(team):
     time.sleep(0.3)
     print('队员 - %s' % team['members'])
     time.sleep(0.3)
-    print('号号- %s' % team['slogan'])
+    print('口号- %s' % team['slogan'])
 
 def create_promotion_task(now, delay):
     print('\n开始设置抢购活动')
@@ -74,7 +74,7 @@ def create_promotion_task(now, delay):
 
 def test_advance_detail(team, duration, promotion_id, qty, start_time):
     tasks = []
-    for uid in range(1, 11):
+    for uid in range(1, 1001):
         url = team['app'] + '/promotion/index.ashx'
         url += "?uid=%d&prom_id=%d&rnd=%d" % (uid, promotion_id, time.time())
 
@@ -126,7 +126,7 @@ def test_advance_detail(team, duration, promotion_id, qty, start_time):
 
 def test_advance_buy(team, duration, promotion_id, qty, start_time):
     tasks = []
-    for uid in range(1, 11):
+    for uid in range(1, 1001):
         url = team['app'] + '/promotion/buy.ashx'
         url += "?uid=%d&prom_id=%d&rnd=%d" % (uid, promotion_id, time.time())
 
@@ -175,9 +175,9 @@ def test_advance_buy(team, duration, promotion_id, qty, start_time):
 
     return agg_count, agg_error_count, avg_throughput, last_error
 
-def test_rush_buy(team, duration, promotion_id, qty, start_time):
+def test_rush_buy(team, duration, promotion_id, uid_from, uid_to):
     tasks = []
-    for uid in range(1, 1001):
+    for uid in range(uid_from, uid_to + 1):
         url = team['app'] + '/promotion/buy.ashx'
 
         tasks.append(
@@ -203,7 +203,7 @@ def test_rush_buy(team, duration, promotion_id, qty, start_time):
         if lm.agents_started:
             ids = stats.keys()
             responsed = sum([stats[id].count for id in ids])
-            if responsed == 1000:
+            if responsed == uid_to - uid_from + 1:
                 all_responsed = True
 
             elapsed_secs = time.time() - start_time
@@ -307,7 +307,7 @@ def test_rush_pay(team, duration, orders):
 
 def test_remain_detail(team, duration, promotion_id, remain):
     tasks = []
-    for uid in range(1, 1000):
+    for uid in range(1001, 2001):
         url = team['app'] + '/promotion/index.ashx'
         url += "?uid=%d&prom_id=%d&rnd=%d" % (uid, promotion_id, time.time())
 
@@ -410,7 +410,7 @@ def run_team_test(team):
 
     order_diff = 0
     orders = None
-    for r in range(1):
+    for r in range(5):
         print('\n第 %d 轮抢购' % (r + 1))
 
         dm = DataMan(config.SQL_OPT)
@@ -420,7 +420,7 @@ def run_team_test(team):
         dm.reset_users()
         dm.close()
 
-        (reqs, errors, qps, last_error, orders) = test_rush_buy(team, 30, prom_id, qty, start_time)
+        (reqs, errors, qps, last_error, orders) = test_rush_buy(team, 30, prom_id, 1, 1000)
         order_diff = len(orders) - qty
         if order_diff != 0:
             break
@@ -431,8 +431,8 @@ def run_team_test(team):
         score += 5
 
         if order_diff == 0:
-            print('未出现超卖或剩余：+15')
-            score += 15
+            print('未出现超卖或剩余：+10')
+            score += 10
         else:
             print('出现【%s %d 件】情况，此项不能得分' % ('超卖' if order_diff > 0 else '剩余', abs(order_diff)))
             print('关键性节点错误，测试中止')
@@ -461,8 +461,8 @@ def run_team_test(team):
         score += 5
 
         if pay_diff == 0:
-            print('铁粉订单均正常支付：+15')
-            score += 15
+            print('铁粉订单均正常支付：+10')
+            score += 10
         else:
             print('出现部分未正常支付情况，此项不能得分')
             print('关键性节点错误，测试中止')
@@ -500,6 +500,67 @@ def run_team_test(team):
             score += 5
 
         print('\n%s' % last_error)
+
+    print('\n\n第六步：铁粉的最后希望')
+
+    order_diff = 0
+    orders = None
+    for r in range(1):
+        print('\n第 %d 轮抢购' % (r + 1))
+        (reqs, errors, qps, last_error, orders) = test_rush_buy(team, 30, prom_id, 1001, 2000)
+        order_diff = len(orders) - remain
+        if order_diff != 0:
+            break
+
+    print('\n得分情况')
+    if errors == 0:
+        print('未检测到HTTP错误：+5')
+        score += 5
+
+        if order_diff == 0:
+            print('未出现超卖或剩余：+10')
+            score += 10
+        else:
+            print('出现【%s %d 件】情况，此项不能得分' % ('超卖' if order_diff > 0 else '剩余', abs(order_diff)))
+            print('关键性节点错误，测试中止')
+            return score
+
+    else:
+        if last_error.find('购买失败，应当返回订单编号等信息或抢光') >= 0:
+            print('未检测到HTTP错误：+5')
+            score += 5
+
+        print('\n%s' % last_error)
+        print('关键性节点错误，测试中止')
+        return score
+
+    print('\n\n第七步：铁粉的狂欢')
+    print('\n共抢到 %d 个订单，这回全部支付完' % (len(orders)))
+    (reqs, errors, qps, last_error, paid_orders) = test_rush_pay(team, 5, orders)
+    pay_diff = len(paid_orders) - len(orders)
+
+    print('\n得分情况')
+    if errors == 0:
+        print('未检测到HTTP错误：+5')
+        score += 5
+
+        if pay_diff == 0:
+            print('铁粉订单均正常支付：+10')
+            print('库存及销量正确：+5')
+            score += 15
+        else:
+            print('出现部分未正常支付情况，此项不能得分')
+            print('关键性节点错误，测试中止')
+            return score
+
+    else:
+        if last_error.find('支付失败，应当返回订单支付信息、支付超时、已经支付等') >= 0:
+            print('未检测到HTTP错误：+5')
+            score += 5
+
+        print('\n%s' % last_error)
+        print('关键性节点错误，测试中止')
+        return score
 
     print('\n完成所有测试内容，开始计算总分...')
     return score
