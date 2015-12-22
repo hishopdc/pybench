@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import time
+from datetime import datetime
+from datetime import timedelta
 import pymssql
 from tools import RandomUtil
 
@@ -22,15 +24,51 @@ class DataMan:
 
     def remove_orders(self):
         cursor = self.conn.cursor()
-        tables = [
-            'Users', 'Products', 'Promotions', 'Orders'
-        ]
 
-        cursor.execute(
-            'DELETE FROM [%s].[dbo].[Orders]' % (self.opt['db'])
-        )
+        sql = 'DELETE FROM [%s].[dbo].[Orders]' % (self.opt['db'])
+
+        cursor.execute(sql)
+        self.conn.commit()
+        cursor.close()
+
+    def reset_promotion(self, promotion_id, product_id, qty, price, start_time, end_time):
+        self.remove_orders()
+
+        cursor = self.conn.cursor()
+
+
+        sql = """
+        UPDATE [%s].[dbo].[Promotions]
+        SET ProductId = %d, StartTime = '%s', EndTime = '%s',
+        Quantity = %d, Price = %.2f
+        WHERE PromotionId = %d
+        """ % (self.opt['db'],
+               product_id,
+               start_time.strftime('%Y-%m-%d %H:%M:%S'),
+               end_time.strftime('%Y-%m-%d %H:%M:%S'),
+               qty, price,
+               promotion_id
+              )
+
+        cursor.execute(sql)
+
+        sql = """
+        UPDATE [%s].[dbo].[Products]
+        SET SaleCounts = 0, Stock = 100
+        WHERE ProductId = %d
+        """ % (self.opt['db'], product_id)
+
+        cursor.execute(sql)
+
+        sql = """
+        UPDATE [%s].[dbo].[Users]
+        SET OrderNumber = 0, OrderAmount = 0
+        """ % (self.opt['db'])
+
+        cursor.execute(sql)
 
         self.conn.commit()
+        cursor.close()
 
     def clear_all(self):
         cursor = self.conn.cursor()

@@ -5,6 +5,7 @@ import cookielib
 import copy
 import httplib
 import os
+import json
 import pickle
 import Queue
 import random
@@ -32,6 +33,7 @@ class TaskRequest():
         self.body = body
         self.repeat = repeat
         self.loop = loop
+        self.error = None
 
         if headers:
             self.headers = headers
@@ -50,16 +52,22 @@ class TaskRequest():
     def add_header(self, header_name, value):
         self.headers[header_name] = value
 
-class DetailTaskRequest(TaskRequest):
+class NotStartTask(TaskRequest):
     def __init__(self, url='http://localhost/test.htm', method='GET', body='',
                  headers=None, repeat=1, loop = False):
         TaskRequest.__init__(self, url, method, body, headers, repeat, loop)
 
+        self.start_time = None
+
     def verify(self, value):
-        return True
+        return value.find(self.start_time) >= 0
 
 class BuyTaskRequest(TaskRequest):
     def __init__(self, url, uid, prom_id):
+        self.uid = uid
+        self.prom_id = prom_id
+        self.result = None
+
         body = 'uid=%d&prom_id=%d' % (uid, prom_id)
         headers = {'Content-type': 'application/x-www-form-urlencoded'}
         TaskRequest.__init__(self, url, 'POST', body, headers, 1, False)
@@ -91,9 +99,18 @@ class TaskAgent(Thread):
             if self.signal['setted']:
                 self.cookie_jar = cookielib.CookieJar()
                 resp, content, req_start_time, req_end_time, connect_end_time = self.send(self.task)
+                self.count += 1
 
                 if resp.code != 200:
                     self.error_count += 1
+                    self.task.error = resp.code
+                    print('http error: %d' % resp.code)
+                    self.task.result = content
+
+                elif not self.task.verify(content):
+                    self.error_count += 1
+                    self.task.error = -1000
+                    self.task.result = '返回值未通过验证:\n' + content
 
                 else:
                     self.task.result = content
@@ -102,7 +119,6 @@ class TaskAgent(Thread):
                 connect_latency = (connect_end_time - req_start_time)
                 resp_bytes = len(content)
 
-                self.count += 1
                 total_bytes += resp_bytes
                 total_latency += latency
                 total_connect_latency += connect_latency
@@ -112,6 +128,9 @@ class TaskAgent(Thread):
                     total_latency, total_connect_latency, total_bytes
                 )
                 self.runtime_stats[self.id].agent_start_time = agent_start_time
+
+                if self.error_count > 0:
+                    break
 
                 if not self.task.loop:
                     break
@@ -152,20 +171,12 @@ class TaskAgent(Thread):
             resp.code = e.code
             resp.msg = httplib.responses[e.code]
             resp.headers = dict(e.info())
-            print(e)
-            content = ''
+            content = e.read()
         except urllib2.URLError, e:
             connect_end_time = self.default_timer()
             resp = ErrorResponse()
             resp.code = 0
             resp.msg = str(e.reason)
-            resp.headers = {}
-            content = ''
-        except IOError, e:
-            connect_end_time = self.default_timer()
-            resp = ErrorResponse()
-            resp.code = 0
-            resp.msg = str(e.strerror)
             resp.headers = {}
             content = ''
 
@@ -235,6 +246,8 @@ class LoadManager(Thread):
             'setted': False
         }
 
+        print('-------------------------------------------------')
+        print('开始启动并发测试')
         for i in range(self.num_agents):
             spacing = float(self.rampup) / float(self.num_agents)
             if i > 0:
@@ -243,7 +256,7 @@ class LoadManager(Thread):
                 agent = TaskAgent(i, self.runtime_stats, self.tasks[i], signal)
                 agent.start()
                 self.agent_refs.append(agent)
-                agent_started_line = u'启动虚拟用户 %d 个' % (i + 1)
+                agent_started_line = u'激活虚拟用户 %d 个' % (i + 1)
                 if sys.platform.startswith('win'):
                     sys.stdout.write(chr(0x08) * len(agent_started_line))
                     sys.stdout.write(agent_started_line)
@@ -258,7 +271,7 @@ class LoadManager(Thread):
         if sys.platform.startswith('win'):
             sys.stdout.write('\n')
 
-        print '启动完成 ...\n\n'
+        print '开始测试 ...\n'
         self.agents_started = True
 
     def stop(self, wait = True):

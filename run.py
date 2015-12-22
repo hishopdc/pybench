@@ -7,13 +7,16 @@ import time
 from optparse import OptionParser
 from threading import Thread
 from loader import LoadManager
-from loader import DetailTaskRequest
+from loader import NotStartTask
 from loader import BuyTaskRequest
 from tools import RuntimeReporter
 from dataman import *
 import config
 
+PRODUCT_ID = 86
+PROMOTION_ID = 1
 PROMOTION_QTY = 50
+PROMOTION_PRICE = 168.5
 STOCK = 100
 
 def reset_db(product_id, stock, qty, price):
@@ -34,10 +37,7 @@ def reset_db(product_id, stock, qty, price):
     dm.close()
 
 
-def do_detail_task(id_from, id_to, duration):
-    tm_start = datetime.now()
-    print('HiBench 开始详情加压评测...')
-    print(tm_start.strftime('%Y-%m-%d %H:%M:%S.%f\n'))
+def do_detail_task(id_from, id_to, duration, start_time):
 
     interval = config.INTERVAL
     rampup = config.RAMPUP
@@ -50,9 +50,10 @@ def do_detail_task(id_from, id_to, duration):
         url = config.BASE_URL + '/promotion/index.ashx'
         url += "?uid=%d&prom_id=%d&time=%d" % (i, 1, time.time())
 
-        req = DetailTaskRequest(url)
-        req.loop = True
-        tasks.append(req)
+        t = NotStartTask(url)
+        t.start_time = start_time
+        t.loop = True
+        tasks.append(t)
 
     lm = LoadManager(
         tasks, interval, rampup, log_msgs,
@@ -74,8 +75,10 @@ def do_detail_task(id_from, id_to, duration):
         if lm.agents_started:
             elapsed_secs = time.time() - start_time
             if not reporter.refresh(elapsed_secs, refresh_rate):
+                print('测试失败！')
                 break
 
+    print('请稍等，正在停止所有虚拟用户操作...')
     lm.stop(False)
 
     ids = runtime_stats.keys()
@@ -86,13 +89,15 @@ def do_detail_task(id_from, id_to, duration):
     avg_resp_time = agg_total_latency / agg_count
     avg_throughput = float(agg_count) / elapsed_secs
 
-    print(
-        '======== 系统容量测试成绩 ========\nREQS: %d\nQPS: %.2f' % (
-            agg_count - agg_error_count, avg_throughput
-        )
-    )
+    last_error = None
+    if agg_error_count > 0:
+        for t in tasks:
+            if t.error:
+                last_error = t.result
+                break
 
-    sys.exit(0)
+
+    return agg_count, agg_error_count, avg_throughput, last_error
 
 def do_buy_task(id_from, id_to, duration):
     tm_start = datetime.now()
@@ -143,7 +148,7 @@ def do_buy_task(id_from, id_to, duration):
             if all_responsed:
                 break
 
-    lm.stop(False)
+    lm.stop(True)
 
     ids = runtime_stats.keys()
     agg_count = sum([runtime_stats[id].count for id in ids])
@@ -155,19 +160,19 @@ def do_buy_task(id_from, id_to, duration):
 
     ocount = 0
     for t in tasks:
-        if t.result.find('order_id') >= 0:
+        if 'order_id' in t.result:
             ocount += 1
-
 
     print(
         '======== 测试成绩 ========\nREQS: %d\nQPS: %.2f' % (
             agg_count - agg_error_count, avg_throughput
         )
     )
+
     print('活动数量 %d 个, 抢购成功 %d 个' % (PROMOTION_QTY, ocount))
 
     overbuy = ocount - PROMOTION_QTY
-    if overbuy > 0:
+    if overbuy != 0:
         print('！！！出现超卖 %d 件商品' % (overbuy))
         return False
 
@@ -203,7 +208,7 @@ if __name__ == '__main__':
     )
 
     parser.add_option(
-        '-d', dest = 'duration', type='int', help='持续时间（分钟）'
+        '-d', dest = 'duration', type='float', help='持续时间（分钟）'
     )
 
     (options, args) = parser.parse_args()
@@ -213,13 +218,44 @@ if __name__ == '__main__':
             print('数据初始化完成！')
 
         elif options.detail_task:
-            do_detail_task(options.id_from, options.id_to, options.duration)
+            start_time = datetime.now()
+            end_time = start_time + timedelta(0, options.duration * 60)
+
+            print('HiBench 设置抢购活动')
+            print('活动ID: %d' % PROMOTION_ID)
+            print('产品ID: %d' % PRODUCT_ID)
+            print('数量: %d' % PROMOTION_QTY)
+            print('价格: %.2f' % PROMOTION_PRICE)
+            print('开始时间: %s' % start_time.strftime('%Y-%m-%d %H:%M:%S'))
+            print('结束时间: %s' % end_time.strftime('%Y-%m-%d %H:%M:%S'))
+
+            # 苍狼队在这里缓存了活动的信息，但没有及时过期
+            dm = DataMan(config.SQL_OPT)
+            dm.open()
+            dm.reset_promotion(
+                PROMOTION_ID, PRODUCT_ID,
+                PROMOTION_QTY, PROMOTION_PRICE,
+                start_time, end_time
+            )
+            dm.close()
+
+            print('\nHiBench “活动详情”加压测试...')
+            (reqs, errors, qps, last_error) = do_detail_task(
+                options.id_from, options.id_to, options.duration,
+                start_time.strftime('%Y-%m-%d %H:%M:%S')
+            )
+
+            if errors > 0:
+                print('出现错误，未通过测试！\n' + last_error)
 
         elif options.buy_task:
             for i in range(20):
                 dm = DataMan(config.SQL_OPT)
                 dm.open()
-                dm.remove_orders()
+                dm.reset_promotion(
+                    PROMOTION_ID, PRODUCT_ID, PROMOTION_QTY,
+                    PROMOTION_PRICE, 120
+                )
                 dm.close()
 
                 if not do_buy_task(options.id_from, options.id_to, options.duration):
