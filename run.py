@@ -194,15 +194,24 @@ def test_rush_buy(team, duration, promotion_id, qty, start_time):
     start_time = time.time()
     reporter = RuntimeReporter(duration, stats)
 
+    all_responsed = False
     elapsed_secs = 0
     while (time.time() < start_time + duration):
         refresh_rate = 0.5
         time.sleep(refresh_rate)
 
         if lm.agents_started:
+            ids = runtime_stats.keys()
+            responsed = sum([runtime_stats[id].count for id in ids])
+            if responsed == id_to - id_from + 1:
+                all_responsed = True
+
             elapsed_secs = time.time() - start_time
             if not reporter.refresh(elapsed_secs, refresh_rate):
                 print('测试失败！')
+                break
+
+            if all_responsed:
                 break
 
     print('请稍等，正在停止所有虚拟用户操作...')
