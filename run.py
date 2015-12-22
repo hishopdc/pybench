@@ -35,148 +35,6 @@ def reset_db(product_id, stock, qty, price):
 
     dm.close()
 
-
-def do_detail_task(id_from, id_to, duration, start_time):
-
-    interval = config.INTERVAL
-    rampup = config.RAMPUP
-    log_msgs = config.LOG_MSGS
-    runtime_stats = {}
-    error_queue = []
-
-    tasks = []
-    for i in range(id_from, id_to + 1):
-        url = config.BASE_URL + '/promotion/index.ashx'
-        url += "?uid=%d&prom_id=%d&time=%d" % (i, 1, time.time())
-
-        t = NotStartTask(url)
-        t.start_time = start_time
-        t.loop = True
-        tasks.append(t)
-
-    lm = LoadManager(
-        tasks, interval, rampup, log_msgs,
-        runtime_stats, error_queue
-    )
-
-    lm.setDaemon(True)
-    lm.start()
-
-    start_time = time.time()
-    duration_s = duration * 60
-    reporter = RuntimeReporter(duration_s, runtime_stats)
-
-    elapsed_secs = 0
-    while (time.time() < start_time + duration_s):
-        refresh_rate = 0.5
-        time.sleep(refresh_rate)
-
-        if lm.agents_started:
-            elapsed_secs = time.time() - start_time
-            if not reporter.refresh(elapsed_secs, refresh_rate):
-                print('测试失败！')
-                break
-
-    print('请稍等，正在停止所有虚拟用户操作...')
-    lm.stop(False)
-
-    ids = runtime_stats.keys()
-    agg_count = sum([runtime_stats[id].count for id in ids])
-    agg_error_count = sum([runtime_stats[id].error_count for id in ids])
-    agg_total_latency = sum([runtime_stats[id].total_latency for id in ids])
-
-    avg_resp_time = agg_total_latency / agg_count
-    avg_throughput = float(agg_count) / elapsed_secs
-
-    last_error = None
-    if agg_error_count > 0:
-        for t in tasks:
-            if t.error:
-                last_error = t.result
-                break
-
-
-    return agg_count, agg_error_count, avg_throughput, last_error
-
-def do_buy_task(id_from, id_to, duration):
-    tm_start = datetime.now()
-    print('HiBench 开始抢购评测...')
-    print(tm_start.strftime('%Y-%m-%d %H:%M:%S.%f\n'))
-
-    interval = config.INTERVAL
-    rampup = config.RAMPUP
-    log_msgs = config.LOG_MSGS
-    runtime_stats = {}
-    error_queue = []
-
-    tasks = []
-    for i in range(id_from, id_to + 1):
-        url = config.BASE_URL + '/promotion/buy.ashx'
-
-        req = BuyTaskRequest(url, i, 1)
-        tasks.append(req)
-
-    lm = LoadManager(
-        tasks, interval, rampup, log_msgs,
-        runtime_stats, error_queue
-    )
-
-    lm.setDaemon(True)
-    lm.start()
-
-    start_time = time.time()
-    duration_s = duration * 60
-    reporter = RuntimeReporter(duration_s, runtime_stats)
-
-    all_responsed = False
-    elapsed_secs = 0
-    while (time.time() < start_time + duration_s):
-        refresh_rate = 0.5
-        time.sleep(refresh_rate)
-
-        if lm.agents_started:
-            ids = runtime_stats.keys()
-            responsed = sum([runtime_stats[id].count for id in ids])
-            if responsed == id_to - id_from + 1:
-                all_responsed = True
-
-            elapsed_secs = time.time() - start_time
-            if not reporter.refresh(elapsed_secs, refresh_rate):
-                break
-
-            if all_responsed:
-                break
-
-    lm.stop(True)
-
-    ids = runtime_stats.keys()
-    agg_count = sum([runtime_stats[id].count for id in ids])
-    agg_error_count = sum([runtime_stats[id].error_count for id in ids])
-    agg_total_latency = sum([runtime_stats[id].total_latency for id in ids])
-
-    avg_resp_time = agg_total_latency / agg_count
-    avg_throughput = float(agg_count) / elapsed_secs
-
-    ocount = 0
-    for t in tasks:
-        if 'order_id' in t.result:
-            ocount += 1
-
-    print(
-        '======== 测试成绩 ========\nREQS: %d\nQPS: %.2f' % (
-            agg_count - agg_error_count, avg_throughput
-        )
-    )
-
-    print('活动数量 %d 个, 抢购成功 %d 个' % (PROMOTION_QTY, ocount))
-
-    overbuy = ocount - PROMOTION_QTY
-    if overbuy != 0:
-        print('！！！出现超卖 %d 件商品' % (overbuy))
-        return False
-
-    return True
-
 def team_intro(team):
     print('<=========【%s】队闪亮登场 =========>' % team['name'])
     time.sleep(0.3)
@@ -423,6 +281,7 @@ def run_team_test(team):
 
     print('\n\n第三步：粉丝疯狂抢购')
 
+    order_diff = 0
     for r in range(20):
         print('\n第 %d 轮抢购' % (r + 1))
 
@@ -434,15 +293,20 @@ def run_team_test(team):
         dm.close()
 
         (reqs, errors, qps, last_error, order_count) = test_rush_buy(team, 5, prom_id, qty, start_time)
-        if order_count != qty:
-            print('\n出现超卖或未售光，可卖: %d，实卖: %d' % (qty, order_count))
+        order_diff = order_count - qty
+        if order_diff != 0
             break
 
     print('\n得分情况')
     if errors == 0:
-        print('全部返回“活动未开始”：+5')
+        if order_diff == 0:
+            print('未出现超卖或剩余：+15')
+            score += 15
+        else
+            print('出现【%s】情况，此项不能得分' % ('超卖' if order_diff > 0 else '剩余', abs(order_diff))
+
         print('未检测到HTTP错误：+5')
-        score += 10
+        score += 5
     else:
         if last_error.find('活动尚未开始，应当返回 {"error": "not started"}') >= 0:
             print('未检测到HTTP错误：+5')
@@ -469,33 +333,14 @@ if __name__ == '__main__':
         dest = 'reset', default = False,
         help = '重置数据库'
     )
-    parser.add_option(
-        '-D', action = 'store_true',
-        dest = 'detail_task', default = False
-    )
-    parser.add_option(
-        '-B', action = 'store_true',
-        dest = 'buy_task', default = False
-    )
+
     parser.add_option(
         '-T', action = 'store_true',
-        dest = 'team_mode', default = False
+        dest = 'team_mode', default = False, help = '团队测试模式'
     )
 
     parser.add_option(
-        '-s', dest = 'id_from', type='int', help='起始用户ID'
-    )
-
-    parser.add_option(
-        '-t', dest = 'id_to', type='int', help='截止用户ID'
-    )
-
-    parser.add_option(
-        '-d', dest = 'duration', type='float', help='持续时间（分钟）'
-    )
-
-    parser.add_option(
-        '-n', dest = 'team_number', type='int', help='团队编号'
+        '-n', dest = 'team_number', default = -1, type='int', help='团队编号'
     )
 
     (options, args) = parser.parse_args()
@@ -505,7 +350,7 @@ if __name__ == '__main__':
             print('数据初始化完成！')
 
         elif options.team_mode:
-            if options.team_number != None:
+            if options.team_number != -1:
                 team = config.TEAMS[options.team_number]
                 run_team_test(team)
 
@@ -513,50 +358,6 @@ if __name__ == '__main__':
                 for team in config.TEAMS:
                     run_team_test(team)
                     time.sleep(1)
-
-        elif options.detail_task:
-            start_time = datetime.now()
-            end_time = start_time + timedelta(0, options.duration * 60)
-
-            print('HiBench 设置抢购活动')
-            print('活动ID: %d' % PROMOTION_ID)
-            print('产品ID: %d' % PRODUCT_ID)
-            print('数量: %d' % PROMOTION_QTY)
-            print('价格: %.2f' % PROMOTION_PRICE)
-            print('开始时间: %s' % start_time.strftime('%Y-%m-%d %H:%M:%S'))
-            print('结束时间: %s' % end_time.strftime('%Y-%m-%d %H:%M:%S'))
-
-            # 苍狼队在这里缓存了活动的信息，但没有及时过期
-            dm = DataMan(config.SQL_OPT)
-            dm.open()
-            dm.reset_promotion(
-                PROMOTION_ID, PRODUCT_ID,
-                PROMOTION_QTY, PROMOTION_PRICE,
-                start_time, end_time
-            )
-            dm.close()
-
-            print('\nHiBench “活动详情”加压测试...')
-            (reqs, errors, qps, last_error) = do_detail_task(
-                options.id_from, options.id_to, options.duration,
-                start_time.strftime('%Y-%m-%d %H:%M:%S')
-            )
-
-            if errors > 0:
-                print('出现错误，未通过测试！\n' + last_error)
-
-        elif options.buy_task:
-            for i in range(20):
-                dm = DataMan(config.SQL_OPT)
-                dm.open()
-                dm.reset_promotion(
-                    PROMOTION_ID, PRODUCT_ID, PROMOTION_QTY,
-                    PROMOTION_PRICE, 120
-                )
-                dm.close()
-
-                if not do_buy_task(options.id_from, options.id_to, options.duration):
-                    break
 
         else:
             parser.print_help()
