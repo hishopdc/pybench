@@ -72,14 +72,14 @@ class RuntimeReporter(object):
             self.last_count = agg_count
 
             if self.refreshed_once:
-                self.move_up(10)
+                self.move_up(9)
 
             self.progress_bar.update_time(elapsed_secs)
 
             print self.progress_bar
             print u'\n请求总数: %d\n错误: %d\n平均响应时间(毫秒): %d\n平均吞吐量(QPS): %.2f\n当前吞吐量: %.2f\n下行流量: %.1f KB\n%s' % (
                 agg_count, agg_error_count, avg_resp_time * 1000, avg_throughput, cur_throughput, total_bytes_received / 1000.0, 
-                '\n-------------------------------------------------')
+                '-------------------------------------------------')
             self.refreshed_once = True
 
         return agg_error_count == 0
