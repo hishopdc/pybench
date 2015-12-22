@@ -316,11 +316,67 @@ def test_advance_buy(team, duration, promotion_id, qty, start_time):
 
     return agg_count, agg_error_count, avg_throughput, last_error
 
+def test_rush_buy(team, duration, promotion_id, qty, start_time):
+    tasks = []
+    for uid in range(1, 1001):
+        url = team['app'] + '/promotion/buy.ashx'
+        url += "?uid=%d&prom_id=%d&rnd=%d" % (uid, promotion_id, time.time())
+
+        tasks.append(
+            NormalBuyTask(url, uid, promotion_id)
+        )
+
+    stats = {}
+    errors = []
+
+    lm = LoadManager(tasks, stats, errors)
+    lm.setDaemon(True)
+    lm.start()
+
+    start_time = time.time()
+    reporter = RuntimeReporter(duration, stats)
+
+    elapsed_secs = 0
+    while (time.time() < start_time + duration):
+        refresh_rate = 0.5
+        time.sleep(refresh_rate)
+
+        if lm.agents_started:
+            elapsed_secs = time.time() - start_time
+            if not reporter.refresh(elapsed_secs, refresh_rate):
+                print('测试失败！')
+                break
+
+    print('请稍等，正在停止所有虚拟用户操作...')
+    lm.stop(True)
+
+    ids = stats.keys()
+    agg_count = sum([stats[id].count for id in ids])
+    agg_error_count = sum([stats[id].error_count for id in ids])
+    agg_total_latency = sum([stats[id].total_latency for id in ids])
+
+    avg_resp_time = agg_total_latency / agg_count
+    avg_throughput = float(agg_count) / elapsed_secs
+
+    last_error = None
+    if agg_error_count > 0:
+        for t in tasks:
+            if t.error:
+                last_error = t.result
+                break
+    else:
+        order_count = 0
+        for t in tasks:
+            if 'order_id' in t.result:
+                order_count += 1
+
+    return agg_count, agg_error_count, avg_throughput, last_error, order_count
+
 def run_team_test(team):
     team_intro(team)
 
     now = datetime.now()
-    delay = 15
+    delay = 20
     (prom_id, prod_id, qty, price, start_time, end_time) = create_promotion_task(now, delay)
 
     score = 0
@@ -364,6 +420,35 @@ def run_team_test(team):
         time.sleep(1)
 
     print('================ 活动正式开始 ================')
+
+    print('\n\n第三步：粉丝疯狂抢购')
+
+    for r in range(20):
+        print('\n第 %d 轮抢购' % (r + 1))
+
+        dm = DataMan(config.SQL_OPT)
+        dm.open()
+        dm.remove_orders()
+        dm.reset_product(PRODUCT_ID)
+        dm.reset_users()
+        dm.close()
+
+        (reqs, errors, qps, last_error, order_count) = test_rush_buy(team, 5, prom_id, qty, start_time)
+        if order_count != qty:
+            print('\n出现超卖或未售光，可卖: %d，实卖: %d' % (qty, order_count))
+            break
+
+    print('\n得分情况')
+    if errors == 0:
+        print('全部返回“活动未开始”：+5')
+        print('未检测到HTTP错误：+5')
+        score += 10
+    else:
+        if last_error.find('活动尚未开始，应当返回 {"error": "not started"}') >= 0:
+            print('未检测到HTTP错误：+5')
+            score += 5
+
+        print('\n%s' % last_error)
 
 
 def move_up(times):
