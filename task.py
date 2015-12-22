@@ -108,3 +108,21 @@ class RemainPageTask(TaskRequest):
 
         return result, msg
 
+class RushLateTask(TaskRequest):
+    def __init__(self, url, uid, prom_id):
+        self.uid = uid
+        self.prom_id = prom_id
+        self.result = None
+
+        body = 'uid=%d&prom_id=%d' % (uid, prom_id)
+        headers = {'Content-type': 'application/x-www-form-urlencoded'}
+        TaskRequest.__init__(self, url, 'POST', body, headers, 1, False)
+
+    def verify(self, value):
+        result = value.find('ended') >= 0
+        if not result:
+            result = value.find('sold out') >= 0
+
+        msg = '' if result else '返回状态错误，应为活动已关闭或抢光'
+        return result, msg
+
