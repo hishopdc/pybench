@@ -422,30 +422,74 @@ def test_rush_late(team, duration, promotion_id, uid_from, uid_to):
 
     return agg_count, agg_error_count, avg_throughput, last_error, orders
 
+def update_score(sjs):
+    file = '/home/xdev/ws/hibench/assets/bmb.json'
+    with open(file, 'w') as f:
+        jsc = json.dumps(sjs, indent = 2)
+        f.write(jsc)
+
 def run_team_test(team):
     team_intro(team)
+    score = 0
+
+    sjs = None
+    file = '/home/xdev/ws/hibench/assets/bmb.json'
+    with open(file, 'r') as f:
+        sjs = json.loads(f.read())
+
+    ts = None
+    for s in sjs:
+        if s['name'] == team['name']:
+            ts = s
+        else:
+            s['state'] = 'stopped'
+
+    if not ts:
+        sjs.append({})
+        ts = sjs[len(sjs) - 1]
+
+    ts['name'] = team['name']
+    ts['captain'] = team['captain']
+    ts['members'] = team['members']
+    ts['slogan'] = team['slogan']
+    ts['state'] = 'testing'
+    ts['scores'] = []
+    scores = ts['scores']
+    update_score(sjs)
 
     now = datetime.now()
     delay = 75
     duration = 160
     (prom_id, prod_id, qty, price, start_time, end_time) = create_promotion_task(now, duration, delay)
 
-    score = 0
 
     print('\n\n第一步：活动开始前详情页被粉丝疯狂刷新')
     (reqs, errors, qps, last_error) = test_advance_detail(team, 30, prom_id, qty, start_time)
 
     print('\n得分情况')
+
     if errors == 0:
         print('所有活动信息返回正确：+5')
         print('未检测到HTTP错误：+5')
+        s1_1 = 5
+        s1_2 = 5
+
         score += 10
     else:
+        s1_1 = 0
+        s1_2 = 0
         if last_error.find('未找到匹配的活动信息') >= 0:
             print('未检测到HTTP错误：+5')
+            s1_2 = 5
             score += 5
 
         print('\n%s' % last_error)
+
+    si = {'title': '第一步：活动开始前详情页被粉丝疯狂刷新', 'items': []}
+    si['items'].append({'key': '所有活动信息返回正确', 'value': s1_1})
+    si['items'].append({'key': '未检测到HTTP错误', 'value': s1_2})
+    scores.append(si)
+    update_score(sjs)
 
     print('\n\n第二步：活动开始前黑客试图恶意刷单')
     (reqs, errors, qps, last_error) = test_advance_buy(team, 30, prom_id, qty, start_time)
@@ -454,13 +498,24 @@ def run_team_test(team):
     if errors == 0:
         print('全部返回“活动未开始”：+5')
         print('未检测到HTTP错误：+5')
+        s2_1 = 5
+        s2_2 = 5
         score += 10
     else:
+        s2_1 = 0
+        s2_2 = 0
         if last_error.find('活动尚未开始，应当返回 {"error": "not started"}') >= 0:
             print('未检测到HTTP错误：+5')
+            s2_2 = 5
             score += 5
 
         print('\n%s' % last_error)
+
+    si = {'title': '第二步：活动开始前黑客试图恶意刷单', 'items': []}
+    si['items'].append({'key': '全部返回“活动未开始”', 'value': s2_1})
+    si['items'].append({'key': '未检测到HTTP错误', 'value': s2_2})
+    scores.append(si)
+    update_score(sjs)
 
     print('\n')
     el = (datetime.now() - now).total_seconds()
@@ -492,25 +547,40 @@ def run_team_test(team):
             break
 
     print('\n得分情况')
+    crashed = False
+    s3_1 = 0
+    s3_2 = 0
     if errors == 0:
         print('未检测到HTTP错误：+5')
+        s3_2 = 5
         score += 5
 
         if order_diff == 0:
             print('未出现超卖或剩余：+10')
+            s3_1 = 10
             score += 10
         else:
             print('出现【%s %d 件】情况，此项不能得分' % ('超卖' if order_diff > 0 else '剩余', abs(order_diff)))
             print('关键性节点错误，测试中止')
-            return score
+            crashed = True
 
     else:
         if last_error.find('购买失败，应当返回订单编号等信息或抢光') >= 0:
             print('未检测到HTTP错误：+5')
+            s3_2 = 5
             score += 5
 
         print('\n%s' % last_error)
         print('关键性节点错误，测试中止')
+        crashed = True
+
+    si = {'title': '第三步：粉丝疯狂抢购', 'items': []}
+    si['items'].append({'key': '未出现超卖或剩余', 'value': s3_1})
+    si['items'].append({'key': '未检测到HTTP错误', 'value': s3_2})
+    scores.append(si)
+    update_score(sjs)
+
+    if crashed:
         return score
 
     buy_time = datetime.now()
@@ -522,25 +592,40 @@ def run_team_test(team):
     pay_diff = len(paid_orders) - len(part)
 
     print('\n得分情况')
+    crashed = False
+    s4_1 = 0
+    s4_2 = 0
     if errors == 0:
         print('未检测到HTTP错误：+5')
+        s4_2 = 5
         score += 5
 
         if pay_diff == 0:
             print('铁粉订单均正常支付：+10')
+            s4_1 = 10
             score += 10
         else:
             print('出现部分未正常支付情况，此项不能得分')
             print('关键性节点错误，测试中止')
-            return score
+            crashed = True
 
     else:
         if last_error.find('支付失败，应当返回订单支付信息、支付超时、已经支付等') >= 0:
             print('未检测到HTTP错误：+5')
+            s4_2 = 5
             score += 5
 
         print('\n%s' % last_error)
         print('关键性节点错误，测试中止')
+        crashed = True
+
+    si = {'title': '第四步：铁粉买买买，假粉反悔了', 'items': []}
+    si['items'].append({'key': '铁粉订单均正常支付', 'value': s4_1})
+    si['items'].append({'key': '未检测到HTTP错误', 'value': s4_2})
+    scores.append(si)
+    update_score(sjs)
+
+    if crashed:
         return score
 
     print('\n')
@@ -556,16 +641,27 @@ def run_team_test(team):
     (reqs, errors, qps, last_error) = test_remain_detail(team, 30, prom_id, remain)
 
     print('\n得分情况')
+    s5_1 = 0
+    s5_2 = 0
     if errors == 0:
         print('可抢数量正确：+5')
         print('未检测到HTTP错误：+5')
+        s5_1 = 5
+        s5_2 = 5
         score += 10
     else:
         if last_error.find('剩余可抢数量错误，正确应为') >= 0:
             print('未检测到HTTP错误：+5')
+            s5_2 = 5
             score += 5
 
         print('\n%s' % last_error)
+
+    si = {'title': '第五步：没抢到的铁粉们又等到了春天', 'items': []}
+    si['items'].append({'key': '铁粉订单均正常支付', 'value': s5_1})
+    si['items'].append({'key': '未检测到HTTP错误', 'value': s5_2})
+    scores.append(si)
+    update_score(sjs)
 
     print('\n\n第六步：铁粉的最后希望')
 
@@ -576,25 +672,40 @@ def run_team_test(team):
     order_diff = len(orders) - remain
 
     print('\n得分情况')
+    crashed = False
+    s6_1 = 0
+    s6_2 = 0
     if errors == 0:
         print('未检测到HTTP错误：+5')
+        s6_2 = 5
         score += 5
 
         if order_diff == 0:
             print('未出现超卖或剩余：+10')
+            s6_1 = 10
             score += 10
         else:
             print('出现【%s %d 件】情况，此项不能得分' % ('超卖' if order_diff > 0 else '剩余', abs(order_diff)))
             print('关键性节点错误，测试中止')
-            return score
+            crashed = True
 
     else:
         if last_error.find('购买失败，应当返回订单编号等信息或抢光') >= 0:
             print('未检测到HTTP错误：+5')
+            s6_2 = 5
             score += 5
 
         print('\n%s' % last_error)
         print('关键性节点错误，测试中止')
+        crashed = True
+
+    si = {'title': '第六步：铁粉的最后希望', 'items': []}
+    si['items'].append({'key': '未出现超卖或剩余', 'value': s6_1})
+    si['items'].append({'key': '未检测到HTTP错误', 'value': s6_2})
+    scores.append(si)
+    update_score(sjs)
+
+    if crashed:
         return score
 
     print('\n\n第七步：铁粉的狂欢')
@@ -603,26 +714,44 @@ def run_team_test(team):
     pay_diff = len(paid_orders) - len(orders)
 
     print('\n得分情况')
+    crashed = False
+    s7_1 = 0
+    s7_2 = 0
+    s7_3 = 0
     if errors == 0:
         print('未检测到HTTP错误：+5')
+        s7_3 = 5
         score += 5
 
         if pay_diff == 0:
             print('铁粉订单均正常支付：+5')
             print('库存及销量正确：+5')
+            s7_1 = 5
+            s7_2 = 5
             score += 10
         else:
             print('出现部分未正常支付情况，此项不能得分')
             print('关键性节点错误，测试中止')
-            return score
+            crashed = True
 
     else:
         if last_error.find('支付失败，应当返回订单支付信息、支付超时、已经支付等') >= 0:
             print('未检测到HTTP错误：+5')
+            s7_3 = 5
             score += 5
 
         print('\n%s' % last_error)
         print('关键性节点错误，测试中止')
+        crashed = True
+
+    si = {'title': '第七步：铁粉的狂欢', 'items': []}
+    si['items'].append({'key': '铁粉订单均正常支付', 'value': s7_1})
+    si['items'].append({'key': '库存及销量正确', 'value': s7_2})
+    si['items'].append({'key': '未检测到HTTP错误', 'value': s7_3})
+    scores.append(si)
+    update_score(sjs)
+
+    if crashed:
         return score
 
     print('\n')
@@ -633,26 +762,33 @@ def run_team_test(team):
         print(u'\n活动即将关闭倒计时: %4d' % (el))
         time.sleep(1)
 
-
-
-
     print('\n\n第八步：迟到的遗憾')
     orders = None
     (reqs, errors, qps, last_error, orders) = test_rush_late(team, 60, prom_id, 2001, 3000)
 
+    s8_1 = 0
+    s8_2 = 0
     print('\n得分情况')
     if errors == 0:
         print('全部返回正确的活动关闭或抢光状态：+5')
         print('未检测到HTTP错误：+5')
+        s8_1 = 5
+        s8_2 = 5
         score += 10
     else:
         if last_error.find('返回状态错误，应为活动已关闭或抢光') >= 0:
             print('未检测到HTTP错误：+5')
+            s8_2 = 5
             score += 5
 
         print('\n%s' % last_error)
 
 
+    si = {'title': '第八步：迟到的遗憾', 'items': []}
+    si['items'].append({'key': '全部返回正确的活动关闭或抢光状态', 'value': s8_1})
+    si['items'].append({'key': '未检测到HTTP错误', 'value': s8_2})
+    scores.append(si)
+    update_score(sjs)
 
     print('\n完成所有测试内容，开始计算总分...')
     return score

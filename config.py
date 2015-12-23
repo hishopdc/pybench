@@ -10,11 +10,18 @@ SQL_OPT = {
 
 TEAMS = [
     {
-        'name': '1024',
-        'captain': '廖日龙',
-        'members': '廖日龙、刘礼义、 罗周宇',
+        'name': 'Hi云',
+        'captain': '何军',
+        'members': '何军、彭江雄、谢惠春',
         'slogan': '404',
-        'app': 'http://192.168.1.118:18007'
+        'app': 'http://192.168.1.118:18001'
+    },
+    {
+        'name': '炮灰',
+        'captain': '晏志勇',
+        'members': '晏志勇、戴仁蔚、周健韬',
+        'slogan': '我们不是炮灰，我们是炮灰的制造者',
+        'app': 'http://192.168.1.118:18002'
     },
     {
         'name': '苍狼',
@@ -22,6 +29,13 @@ TEAMS = [
         'members': '周新星、蒯伟、杨彬',
         'slogan': '众志成城，挑战自我，勇者无畏，所向披靡',
         'app': 'http://192.168.1.118:18003'
+    },
+    {
+        'name': '1024',
+        'captain': '廖日龙',
+        'members': '廖日龙、刘礼义、 罗周宇',
+        'slogan': '404',
+        'app': 'http://192.168.1.118:18007'
     },
     {
         'name': '火狼',
@@ -55,4 +69,3 @@ COOKIES_ENABLED = True
 HTTP_DEBUG = False
 BLOCKING = False
 GUI = False
-
