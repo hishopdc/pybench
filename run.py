@@ -111,10 +111,14 @@ def test_advance_detail(team, duration, promotion_id, qty, start_time):
     agg_error_count = sum([stats[id].error_count for id in ids])
     agg_total_latency = sum([stats[id].total_latency for id in ids])
 
-    avg_resp_time = agg_total_latency / agg_count
-    avg_throughput = float(agg_count) / elapsed_secs
+    if agg_count > 0:
+        avg_resp_time = agg_total_latency / agg_count
+        avg_throughput = float(agg_count) / elapsed_secs
+    else:
+        avg_resp_time = 0
+        avg_throughput = 0
 
-    last_error = None
+    last_error = ''
     if agg_error_count > 0:
         for t in tasks:
             if t.error:
@@ -163,10 +167,14 @@ def test_advance_buy(team, duration, promotion_id, qty, start_time):
     agg_error_count = sum([stats[id].error_count for id in ids])
     agg_total_latency = sum([stats[id].total_latency for id in ids])
 
-    avg_resp_time = agg_total_latency / agg_count
-    avg_throughput = float(agg_count) / elapsed_secs
+    if agg_count > 0:
+        avg_resp_time = agg_total_latency / agg_count
+        avg_throughput = float(agg_count) / elapsed_secs
+    else:
+        avg_resp_time = 0
+        avg_throughput = 0
 
-    last_error = None
+    last_error = ''
     if agg_error_count > 0:
         for t in tasks:
             if t.error:
@@ -222,10 +230,14 @@ def test_rush_buy(team, duration, promotion_id, uid_from, uid_to):
     agg_error_count = sum([stats[id].error_count for id in ids])
     agg_total_latency = sum([stats[id].total_latency for id in ids])
 
-    avg_resp_time = agg_total_latency / agg_count
-    avg_throughput = float(agg_count) / elapsed_secs
+    if agg_count > 0:
+        avg_resp_time = agg_total_latency / agg_count
+        avg_throughput = float(agg_count) / elapsed_secs
+    else:
+        avg_resp_time = 0
+        avg_throughput = 0
 
-    last_error = None
+    last_error = ''
     orders = []
     if agg_error_count > 0:
         for t in tasks:
@@ -235,8 +247,11 @@ def test_rush_buy(team, duration, promotion_id, uid_from, uid_to):
     else:
         for t in tasks:
             if 'order_id' in t.result:
-                o = json.loads(t.result)
-                orders.append({'uid': t.uid, 'order_id': o['order_id']})
+                try:
+                    o = json.loads(t.result)
+                    orders.append({'uid': t.uid, 'order_id': o['order_id']})
+                except ValueError, e:
+                    pass
 
     return agg_count, agg_error_count, avg_throughput, last_error, orders
 
@@ -287,10 +302,14 @@ def test_rush_pay(team, duration, orders):
     agg_error_count = sum([stats[id].error_count for id in ids])
     agg_total_latency = sum([stats[id].total_latency for id in ids])
 
-    avg_resp_time = agg_total_latency / agg_count
-    avg_throughput = float(agg_count) / elapsed_secs
+    if agg_count > 0:
+        avg_resp_time = agg_total_latency / agg_count
+        avg_throughput = float(agg_count) / elapsed_secs
+    else:
+        avg_resp_time = 0
+        avg_throughput = 0
 
-    last_error = None
+    last_error = ''
     if agg_error_count > 0:
         for t in tasks:
             if t.error:
@@ -300,8 +319,11 @@ def test_rush_pay(team, duration, orders):
         paid_orders = []
         for t in tasks:
             if 'order_id' in t.result:
-                o = json.loads(t.result)
-                paid_orders .append({'uid': t.uid, 'order_id': o['order_id']})
+                try:
+                    o = json.loads(t.result)
+                    paid_orders .append({'uid': t.uid, 'order_id': o['order_id']})
+                except ValueError, e:
+                    pass
 
     return agg_count, agg_error_count, avg_throughput, last_error, paid_orders
 
@@ -344,10 +366,14 @@ def test_remain_detail(team, duration, promotion_id, remain):
     agg_error_count = sum([stats[id].error_count for id in ids])
     agg_total_latency = sum([stats[id].total_latency for id in ids])
 
-    avg_resp_time = agg_total_latency / agg_count
-    avg_throughput = float(agg_count) / elapsed_secs
+    if agg_count > 0:
+        avg_resp_time = agg_total_latency / agg_count
+        avg_throughput = float(agg_count) / elapsed_secs
+    else:
+        avg_resp_time = 0
+        avg_throughput = 0
 
-    last_error = None
+    last_error = ''
     if agg_error_count > 0:
         for t in tasks:
             if t.error:
@@ -404,10 +430,14 @@ def test_rush_late(team, duration, promotion_id, uid_from, uid_to):
     agg_error_count = sum([stats[id].error_count for id in ids])
     agg_total_latency = sum([stats[id].total_latency for id in ids])
 
-    avg_resp_time = agg_total_latency / agg_count
-    avg_throughput = float(agg_count) / elapsed_secs
+    if agg_count > 0:
+        avg_resp_time = agg_total_latency / agg_count
+        avg_throughput = float(agg_count) / elapsed_secs
+    else:
+        avg_resp_time = 0
+        avg_throughput = 0
 
-    last_error = None
+    last_error = ''
     orders = []
     if agg_error_count > 0:
         for t in tasks:
@@ -417,8 +447,11 @@ def test_rush_late(team, duration, promotion_id, uid_from, uid_to):
     else:
         for t in tasks:
             if 'order_id' in t.result:
-                o = json.loads(t.result)
-                orders.append({'uid': t.uid, 'order_id': o['order_id']})
+                try:
+                    o = json.loads(t.result)
+                    orders.append({'uid': t.uid, 'order_id': o['order_id']})
+                except ValueError, e:
+                    pass
 
     return agg_count, agg_error_count, avg_throughput, last_error, orders
 
@@ -482,6 +515,8 @@ def run_team_test(team):
             print('未检测到HTTP错误：+5')
             s1_2 = 5
             score += 5
+        else:
+            print('无法正常响应HTTP请求！')
 
         print('\n%s' % last_error)
 
@@ -508,6 +543,8 @@ def run_team_test(team):
             print('未检测到HTTP错误：+5')
             s2_2 = 5
             score += 5
+        else:
+            print('无法正常响应HTTP请求！')
 
         print('\n%s' % last_error)
 
@@ -569,6 +606,8 @@ def run_team_test(team):
             print('未检测到HTTP错误：+5')
             s3_2 = 5
             score += 5
+        else:
+            print('无法正常响应HTTP请求！')
 
         print('\n%s' % last_error)
         print('关键性节点错误，测试中止')
@@ -614,6 +653,8 @@ def run_team_test(team):
             print('未检测到HTTP错误：+5')
             s4_2 = 5
             score += 5
+        else:
+            print('无法正常响应HTTP请求！')
 
         print('\n%s' % last_error)
         print('关键性节点错误，测试中止')
@@ -654,6 +695,8 @@ def run_team_test(team):
             print('未检测到HTTP错误：+5')
             s5_2 = 5
             score += 5
+        else:
+            print('无法正常响应HTTP请求！')
 
         print('\n%s' % last_error)
 
@@ -694,6 +737,8 @@ def run_team_test(team):
             print('未检测到HTTP错误：+5')
             s6_2 = 5
             score += 5
+        else:
+            print('无法正常响应HTTP请求！')
 
         print('\n%s' % last_error)
         print('关键性节点错误，测试中止')
@@ -739,6 +784,8 @@ def run_team_test(team):
             print('未检测到HTTP错误：+5')
             s7_3 = 5
             score += 5
+        else:
+            print('无法正常响应HTTP请求！')
 
         print('\n%s' % last_error)
         print('关键性节点错误，测试中止')
@@ -780,6 +827,8 @@ def run_team_test(team):
             print('未检测到HTTP错误：+5')
             s8_2 = 5
             score += 5
+        else:
+            print('无法正常响应HTTP请求！')
 
         print('\n%s' % last_error)
 
@@ -818,7 +867,7 @@ if __name__ == '__main__':
     )
 
     parser.add_option(
-        '-n', dest = 'team_number', default = -1, type='int', help='团队编号'
+        '-n', dest = 'team_number', default = 0, type='int', help='团队编号'
     )
 
     (options, args) = parser.parse_args()
@@ -828,8 +877,8 @@ if __name__ == '__main__':
             print('数据初始化完成！')
 
         elif options.team_mode:
-            if options.team_number != -1:
-                team = config.TEAMS[options.team_number]
+            if options.team_number > 0:
+                team = config.TEAMS[options.team_number - 1]
                 score = run_team_test(team)
                 print('测试结束，当前团队得分 %d' % score)
 

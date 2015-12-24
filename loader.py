@@ -29,6 +29,7 @@ SOCKET_TIMEOUT = config.SOCKET_TIMEOUT
 class TaskAgent(Thread):
     def __init__(self, id, runtime_stats, task, signal):
         Thread.__init__(self)
+        socket.setdefaulttimeout(SOCKET_TIMEOUT)
         self.id = id
         self.runtime_stats = runtime_stats
         self.running = True
@@ -130,6 +131,22 @@ class TaskAgent(Thread):
             resp.code = 0
             resp.msg = str(e.reason)
             resp.headers = {}
+            content = ''
+        except IOError, e:
+            connect_end_time = self.default_timer()
+            resp = ErrorResponse()
+            resp.code = 0
+            resp.msg = str(e)
+            resp.headers = {}
+            resp.content = 'IOError'
+            content = ''
+        except Exception, e:
+            connect_end_time = self.default_timer()
+            resp = ErrorResponse()
+            resp.code = 0
+            resp.msg = str(e)
+            resp.headers = {}
+            resp.content = 'Exception'
             content = ''
 
         req_end_time = self.default_timer()

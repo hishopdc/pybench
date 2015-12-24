@@ -55,6 +55,9 @@ class AdvanceBuyTask(TaskRequest):
 
     def verify(self, value):
         result = value.find('not started') >= 0
+        if not result:
+            result = value.find('invalid parameters') >= 0
+
         msg = '' if result else '活动尚未开始，应当返回 {"error": "not started"}'
         return result, msg
 
@@ -72,6 +75,10 @@ class NormalBuyTask(TaskRequest):
         result = value.find('order_id') >= 0
         if not result:
             result = value.find('sold out') >= 0
+            if not result:
+                result = value.find('already purchased') >= 0
+                if not result:
+                    result = value.find('invalid parameters') >= 0
 
         msg = '' if result else '购买失败，应当返回订单编号等信息或抢光'
         return result, msg
@@ -102,9 +109,13 @@ class RemainPageTask(TaskRequest):
         self.qty = avl_qty
 
     def verify(self, value):
-        prom = json.loads(value)
-        result = str(prom['avl_qty']) == str(self.qty)
-        msg = '' if result else '剩余可抢数量错误，正确应为 %d' % self.qty
+        try:
+            prom = json.loads(value)
+            result = str(prom['avl_qty']) == str(self.qty)
+            msg = '' if result else '剩余可抢数量错误，正确应为 %d' % self.qty
+        except ValueError, e:
+            result = False
+            msg = '剩余可抢数量错误，正确应为 %d' % self.qty
 
         return result, msg
 
